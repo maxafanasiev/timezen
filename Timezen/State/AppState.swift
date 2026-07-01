@@ -868,7 +868,7 @@ final class AppState: ObservableObject {
 
     // MARK: - URL normalization
 
-    static func normalizedURL(from raw: String) -> URL? {
+    nonisolated static func normalizedURL(from raw: String) -> URL? {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !s.isEmpty else { return nil }
         if !s.lowercased().hasPrefix("http://") && !s.lowercased().hasPrefix("https://") {
