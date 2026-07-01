@@ -49,6 +49,25 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
 
+                Section("Security") {
+                    Toggle(isOn: $state.lockEnabled) {
+                        Label("Require Face ID / passcode", systemImage: "faceid")
+                    }
+                }
+
+                Section("Reminders") {
+                    Toggle(isOn: $state.reminderEnabled) {
+                        Label("Long-timer reminder", systemImage: "bell")
+                    }
+                    if state.reminderEnabled {
+                        Picker(selection: $state.reminderHours) {
+                            ForEach([4, 6, 8, 10, 12], id: \.self) { Text("\($0) hours").tag($0) }
+                        } label: {
+                            Label("Remind after", systemImage: "clock")
+                        }
+                    }
+                }
+
                 Section {
                     Button(role: .destructive) {
                         showSignOutConfirm = true
@@ -59,7 +78,7 @@ struct SettingsView: View {
 
                 Section {
                     HStack {
-                        Text("SolidTime Mobile")
+                        Text("Timezen")
                         Spacer()
                         Text(appVersion).foregroundStyle(.secondary)
                     }

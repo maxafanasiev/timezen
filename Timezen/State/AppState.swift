@@ -1,6 +1,8 @@
 import Foundation
 import SwiftUI
 import Combine
+import LocalAuthentication
+import UserNotifications
 
 @MainActor
 final class AppState: ObservableObject {
@@ -60,6 +62,79 @@ final class AppState: ObservableObject {
 
     private static func loadAppearance() -> AppAppearance {
         AppAppearance(rawValue: UserDefaults.standard.string(forKey: AppAppearance.storageKey) ?? "") ?? .system
+    }
+
+    /// Require Face ID / Touch ID / passcode to open the app.
+    @Published var lockEnabled: Bool = UserDefaults.standard.bool(forKey: "timezen.lock") {
+        didSet {
+            UserDefaults.standard.set(lockEnabled, forKey: "timezen.lock")
+            isUnlocked = true   // keep the current session; re-locks on next background
+        }
+    }
+    /// Whether the app is currently unlocked (starts locked when lock is enabled).
+    @Published var isUnlocked: Bool = false
+
+    /// Prompt biometric / passcode authentication to unlock.
+    func unlock() async {
+        let ctx = LAContext()
+        ctx.localizedFallbackTitle = "Enter Passcode"
+        var error: NSError?
+        guard ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
+            // No biometrics/passcode configured — don't lock the user out.
+            isUnlocked = true
+            return
+        }
+        do {
+            isUnlocked = try await ctx.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Unlock Timezen")
+        } catch {
+            isUnlocked = false
+        }
+    }
+
+    func lockNow() {
+        if lockEnabled { isUnlocked = false }
+    }
+
+    // MARK: - Long-running-timer reminder
+
+    private static let reminderID = "timer-reminder"
+
+    @Published var reminderEnabled: Bool = UserDefaults.standard.bool(forKey: "timezen.reminder") {
+        didSet {
+            UserDefaults.standard.set(reminderEnabled, forKey: "timezen.reminder")
+            if reminderEnabled {
+                UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+            }
+            syncTimerReminder()
+        }
+    }
+    /// Hours after which a still-running timer triggers a reminder.
+    @Published var reminderHours: Int = {
+        let v = UserDefaults.standard.integer(forKey: "timezen.reminderHours")
+        return v == 0 ? 6 : v
+    }() {
+        didSet {
+            UserDefaults.standard.set(reminderHours, forKey: "timezen.reminderHours")
+            syncTimerReminder()
+        }
+    }
+
+    /// Schedule (or cancel) the reminder for the currently-running entry.
+    func syncTimerReminder() {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [Self.reminderID])
+        guard reminderEnabled, let start = activeEntry?.startDate else { return }
+        let interval = start.addingTimeInterval(Double(reminderHours) * 3600).timeIntervalSinceNow
+        guard interval > 0 else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Timer still running"
+        let what = activeEntry?.description?.isEmpty == false ? "“\(activeEntry!.description!)”" : "your timer"
+        content.body = "\(reminderHours)h on \(what). Don't forget to stop it."
+        content.sound = .default
+        let request = UNNotificationRequest(
+            identifier: Self.reminderID, content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false))
+        center.add(request)
     }
 
     private var ticker: AnyCancellable?
@@ -263,6 +338,7 @@ final class AppState: ObservableObject {
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
+        syncTimerReminder()
     }
 
     /// On initial load, if a timer is running in a different organization than the one
@@ -696,6 +772,7 @@ final class AppState: ObservableObject {
             duration: 0, description: desc.isEmpty ? nil : desc, taskId: draftTaskId, projectId: draftProjectId,
             organizationId: selectedMembership?.organizationId, userId: user?.id,
             tags: Array(draftTagIds), billable: draftBillable)
+        syncTimerReminder()
     }
 
     private func stopDemoTimer() {
@@ -710,6 +787,7 @@ final class AppState: ObservableObject {
         dashboardEntries = recentEntries
         activeEntry = nil
         resetDraft()
+        syncTimerReminder()
     }
 
     private func demoClone(_ entry: TimeEntry) -> TimeEntry {

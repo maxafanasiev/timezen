@@ -4,6 +4,14 @@ struct RootView: View {
     @EnvironmentObject var state: AppState
 
     var body: some View {
+        if state.lockEnabled && !state.isUnlocked {
+            LockView()
+        } else {
+            content
+        }
+    }
+
+    @ViewBuilder private var content: some View {
         switch state.phase {
         case .launching:
             LaunchView()
@@ -12,6 +20,30 @@ struct RootView: View {
         case .ready:
             MainTabView()
         }
+    }
+}
+
+/// Full-screen lock shown when biometric/passcode protection is enabled.
+struct LockView: View {
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 52, weight: .semibold))
+                .foregroundStyle(.tint)
+            Text("Timezen is locked").font(.title3.weight(.semibold))
+            Button {
+                Task { await state.unlock() }
+            } label: {
+                Label("Unlock", systemImage: "faceid")
+                    .fontWeight(.semibold)
+                    .padding(.horizontal, 20).padding(.vertical, 12)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task { await state.unlock() }   // prompt automatically on appear
     }
 }
 
