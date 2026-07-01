@@ -1,0 +1,34 @@
+# macOS
+.DS_Store
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Ruby / Fastlane
+vendor/bundle/
+.bundle/
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output/
+fastlane/README.md
+
+# Secrets — never commit signing keys
+*.p8
+*.p12
+*.mobileprovision
+*.cer
+
+# XcodeGen (generated project can be regenerated from project.yml)
+# SolidTime.xcodeproj/   # <- keep checked in by default
+
+# JetBrains
+.idea/

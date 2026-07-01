@@ -1,0 +1,39 @@
+name: iOS CI
+
+on:
+  push:
+    tags:
+      - "v*"            # e.g. git tag v1.0.0 && git push --tags  → builds & uploads to TestFlight
+  workflow_dispatch:      # or run manually from the Actions tab
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  testflight:
+    runs-on: macos-15
+    timeout-minutes: 40
+    env:
+      # App Store Connect API key (base64) — see RELEASE.md
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
+      # fastlane match
+      MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+      MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+      MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.app
+
+      - name: Set up Ruby + Fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Build & upload to TestFlight
+        run: bundle exec fastlane beta
