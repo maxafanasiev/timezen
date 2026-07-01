@@ -3,6 +3,7 @@ import SwiftUI
 import Combine
 import LocalAuthentication
 import UserNotifications
+import ActivityKit
 
 @MainActor
 final class AppState: ObservableObject {
@@ -135,6 +136,36 @@ final class AppState: ObservableObject {
             identifier: Self.reminderID, content: content,
             trigger: UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false))
         center.add(request)
+    }
+
+    // MARK: - Live Activity (running timer)
+
+    private var liveActivity: Activity<TimerActivityAttributes>?
+
+    /// Start/update/end the running-timer Live Activity to match `activeEntry`.
+    func syncLiveActivity() {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        if let active = activeEntry, let start = active.startDate {
+            let project = project(for: active.projectId)
+            let content = ActivityContent(
+                state: TimerActivityAttributes.ContentState(
+                    startedAt: start,
+                    title: active.description ?? "",
+                    projectName: project?.name ?? "No project",
+                    projectColorHex: project?.color ?? "#888888"),
+                staleDate: nil)
+            if let liveActivity, liveActivity.attributes.entryId == active.id {
+                Task { await liveActivity.update(content) }
+            } else {
+                if let old = liveActivity { Task { await old.end(nil, dismissalPolicy: .immediate) } }
+                liveActivity = try? Activity.request(
+                    attributes: TimerActivityAttributes(entryId: active.id),
+                    content: content, pushType: nil)
+            }
+        } else if let old = liveActivity {
+            Task { await old.end(nil, dismissalPolicy: .immediate) }
+            liveActivity = nil
+        }
     }
 
     private var ticker: AnyCancellable?
@@ -339,6 +370,7 @@ final class AppState: ObservableObject {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
         syncTimerReminder()
+        syncLiveActivity()
     }
 
     /// On initial load, if a timer is running in a different organization than the one
@@ -773,6 +805,7 @@ final class AppState: ObservableObject {
             organizationId: selectedMembership?.organizationId, userId: user?.id,
             tags: Array(draftTagIds), billable: draftBillable)
         syncTimerReminder()
+        syncLiveActivity()
     }
 
     private func stopDemoTimer() {
@@ -788,6 +821,7 @@ final class AppState: ObservableObject {
         activeEntry = nil
         resetDraft()
         syncTimerReminder()
+        syncLiveActivity()
     }
 
     private func demoClone(_ entry: TimeEntry) -> TimeEntry {
