@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Timezen — Time tracking for self-hosted SolidTime</title>
+<meta name="description" content="Timezen is a beautiful native iOS time tracker for self-hosted SolidTime servers. Start/stop timer, edit entries, dashboards, dark mode.">
+<link rel="icon" href="assets/icon.png">
+<style>
+  :root{
+    --bg:#0f1020; --card:#191a2e; --text:#f4f4fb; --muted:#a9abc7;
+    --brand1:#5b4bec; --brand2:#7d40f2; --line:#2a2b45;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  nav{display:flex;align-items:center;justify-content:space-between;padding:22px 0}
+  .logo{display:flex;align-items:center;gap:12px;font-weight:700;font-size:20px}
+  .logo img{width:40px;height:40px;border-radius:10px}
+  nav .links a{color:var(--muted);margin-left:24px;font-size:15px}
+  nav .links a:hover{color:var(--text)}
+  .hero{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center;padding:60px 0 40px}
+  .badge{display:inline-block;background:rgba(125,64,242,.15);color:#c3b3ff;border:1px solid #3a2d6b;
+         padding:6px 12px;border-radius:999px;font-size:13px;font-weight:600;margin-bottom:20px}
+  h1{font-size:52px;line-height:1.1;letter-spacing:-.02em;margin-bottom:18px}
+  h1 .grad{background:linear-gradient(90deg,var(--brand1),var(--brand2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{font-size:19px;color:var(--muted);max-width:520px;margin-bottom:28px}
+  .cta{display:flex;gap:14px;flex-wrap:wrap}
+  .btn{padding:13px 22px;border-radius:12px;font-weight:600;font-size:15px;display:inline-flex;align-items:center;gap:8px}
+  .btn.primary{background:linear-gradient(90deg,var(--brand1),var(--brand2));color:#fff}
+  .btn.ghost{background:var(--card);color:var(--text);border:1px solid var(--line)}
+  .btn:hover{transform:translateY(-1px)}
+  .phone{justify-self:center;position:relative}
+  .phone img{width:270px;border-radius:36px;box-shadow:0 30px 80px rgba(91,75,236,.35);border:1px solid var(--line)}
+  .features{padding:50px 0}
+  .features h2{font-size:32px;text-align:center;letter-spacing:-.01em;margin-bottom:8px}
+  .features .lead{text-align:center;color:var(--muted);margin-bottom:40px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px}
+  .card .ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:22px;
+            background:linear-gradient(135deg,var(--brand1),var(--brand2));margin-bottom:14px}
+  .card h3{font-size:18px;margin-bottom:6px}
+  .card p{color:var(--muted);font-size:15px}
+  .shots{display:flex;gap:24px;justify-content:center;padding:20px 0 60px;flex-wrap:wrap}
+  .shots img{width:240px;border-radius:28px;border:1px solid var(--line);box-shadow:0 20px 50px rgba(0,0,0,.4)}
+  footer{border-top:1px solid var(--line);padding:34px 0;color:var(--muted);font-size:14px;text-align:center}
+  footer a{color:#c3b3ff}
+  .disclaimer{max-width:640px;margin:14px auto 0;font-size:13px;opacity:.8}
+  @media(max-width:820px){
+    .hero{grid-template-columns:1fr;text-align:center}.cta{justify-content:center}
+    .sub{margin-left:auto;margin-right:auto}h1{font-size:40px}.grid{grid-template-columns:1fr}
+    nav .links{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <div class="logo"><img src="assets/icon.png" alt="Timezen"><span>Timezen</span></div>
+    <div class="links">
+      <a href="#features">Features</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="https://github.com/maxafanasiev/timezen">GitHub</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div>
+      <span class="badge">Client for self-hosted SolidTime</span>
+      <h1>Track your time,<br><span class="grad">beautifully.</span></h1>
+      <p class="sub">Timezen is a native iOS time tracker for your own <strong>self-hosted SolidTime</strong> server.
+        One-tap timer, rich history, dashboards, and dark mode — your data stays on your server.</p>
+      <div class="cta">
+        <a class="btn primary" href="#features">Explore features</a>
+        <a class="btn ghost" href="https://github.com/maxafanasiev/timezen">View on GitHub</a>
+      </div>
+    </div>
+    <div class="phone"><img src="assets/shot-timer.png" alt="Timezen timer screen"></div>
+  </header>
+
+  <section class="features" id="features">
+    <h2>Everything you need to track time</h2>
+    <p class="lead">Fast, focused, and made for people who host their own tools.</p>
+    <div class="grid">
+      <div class="card"><div class="ic">⏱️</div><h3>One-tap timer</h3><p>Start and stop with a tap. Add project, task, tags and billable — right from the home screen.</p></div>
+      <div class="card"><div class="ic">✏️</div><h3>Edit anything</h3><p>Adjust description, project, and start / end / duration on any entry. Resume or duplicate with a swipe.</p></div>
+      <div class="card"><div class="ic">📊</div><h3>Dashboards</h3><p>Day, week, month, half-month or custom ranges with per-project color charts and a project filter.</p></div>
+      <div class="card"><div class="ic">🌙</div><h3>Dark &amp; light</h3><p>System, Light or Dark theme — switch anytime in Settings.</p></div>
+      <div class="card"><div class="ic">🏢</div><h3>Multi-organization</h3><p>Switch between the organizations you belong to on your SolidTime server.</p></div>
+      <div class="card"><div class="ic">🔒</div><h3>Private by design</h3><p>Your API token is stored in the iOS Keychain. Timezen talks only to your server — never to us.</p></div>
+    </div>
+  </section>
+
+  <section class="shots">
+    <img src="assets/shot-dashboard.png" alt="Dashboard">
+    <img src="assets/shot-dark.png" alt="Dark mode">
+  </section>
+</div>
+
+<footer>
+  <div class="wrap">
+    <a href="privacy.html">Privacy Policy</a> &nbsp;·&nbsp;
+    <a href="https://github.com/maxafanasiev/timezen/issues">Support</a> &nbsp;·&nbsp;
+    <a href="https://github.com/maxafanasiev/timezen">GitHub</a>
+    <p class="disclaimer">Timezen is an independent, unofficial client for SolidTime servers.
+      “SolidTime” is a trademark of its respective owners; Timezen is not affiliated with or endorsed by SolidTime.</p>
+    <p style="margin-top:10px">© 2026 Timezen</p>
+  </div>
+</footer>
+</body>
+</html>

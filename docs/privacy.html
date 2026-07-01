@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Timezen</title>
+<link rel="icon" href="assets/icon.png">
+<style>
+  :root{--bg:#0f1020;--card:#191a2e;--text:#f4f4fb;--muted:#a9abc7;--brand:#7d40f2;--line:#2a2b45}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--text);line-height:1.7}
+  a{color:#c3b3ff}
+  .wrap{max-width:760px;margin:0 auto;padding:0 24px}
+  nav{display:flex;align-items:center;gap:12px;padding:22px 0;font-weight:700}
+  nav img{width:34px;height:34px;border-radius:9px}
+  h1{font-size:34px;margin:20px 0 6px;letter-spacing:-.01em}
+  .updated{color:var(--muted);margin-bottom:28px}
+  h2{font-size:20px;margin:28px 0 8px}
+  p,li{color:#d9daf0}
+  ul{margin:8px 0 8px 22px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px 26px;margin-bottom:20px}
+  strong{color:#fff}
+  footer{border-top:1px solid var(--line);margin-top:36px;padding:26px 0;color:var(--muted);font-size:14px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav><img src="assets/icon.png" alt=""><a href="index.html" style="color:inherit;text-decoration:none">Timezen</a></nav>
+
+  <h1>Privacy Policy</h1>
+  <p class="updated">Last updated: 1 July 2026</p>
+
+  <div class="card">
+    <p><strong>Short version:</strong> Timezen does not collect, store, sell, or share your personal data.
+    The app is a client for your own self-hosted SolidTime server — your data stays between your device
+    and the server you choose.</p>
+  </div>
+
+  <h2>What we collect</h2>
+  <p><strong>Nothing.</strong> Timezen has no analytics, no advertising, no tracking, and no backend of
+  our own. We (the developer) never receive your data.</p>
+
+  <h2>Data you enter</h2>
+  <ul>
+    <li><strong>Server URL &amp; API token</strong> — used only to connect to the SolidTime server you specify.
+      The token is stored securely in the iOS <strong>Keychain</strong> on your device and is sent only to that server.</li>
+    <li><strong>Time entries, projects, tags, etc.</strong> — read from and written to <em>your</em> SolidTime server
+      over an encrypted (HTTPS) connection. They are not sent anywhere else.</li>
+  </ul>
+
+  <h2>Where your data goes</h2>
+  <p>All network requests go directly from your device to the SolidTime server URL you enter. Timezen does
+  not route your data through any third-party service, and the developer operates no server that receives it.
+  How your data is handled on the server side is governed by that server's own operator and policies.</p>
+
+  <h2>Demo mode</h2>
+  <p>If you sign in with the demo/review account, the app loads sample data locally and makes no network
+  requests at all.</p>
+
+  <h2>Data deletion</h2>
+  <p>Signing out removes the stored API token from your device. Deleting the app removes all locally stored
+  data. To delete time-tracking data itself, use your SolidTime server.</p>
+
+  <h2>Children</h2>
+  <p>Timezen is a productivity tool and is not directed to children under 13.</p>
+
+  <h2>Changes</h2>
+  <p>If this policy changes, the updated version will be posted on this page with a new date.</p>
+
+  <h2>Contact</h2>
+  <p>Questions? Open an issue at
+  <a href="https://github.com/maxafanasiev/timezen/issues">github.com/maxafanasiev/timezen/issues</a>
+  or email <a href="mailto:afanasievmaksym2@gmail.com">afanasievmaksym2@gmail.com</a>.</p>
+
+  <footer>
+    <a href="index.html">← Back to Timezen</a>
+    <p style="margin-top:10px">Timezen is an independent, unofficial client for SolidTime servers and is not
+    affiliated with SolidTime.</p>
+  </footer>
+</div>
+</body>
+</html>
