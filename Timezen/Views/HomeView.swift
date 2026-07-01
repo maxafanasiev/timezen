@@ -46,6 +46,7 @@ struct HomeView: View {
                 case "active": editingEntry = state.activeEntry
                 case "first": editingEntry = state.recentEntries.first { !$0.isRunning }
                 case "new": showNewEntry = true
+                case "projpick": showProjectPicker = true
                 default: break
                 }
             }

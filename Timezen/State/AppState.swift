@@ -274,6 +274,63 @@ final class AppState: ObservableObject {
         await switchOrganization(to: target)
     }
 
+    // MARK: - Create project / task / tag (inline)
+
+    func createProject(name: String, color: String, isBillable: Bool) async -> Project? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if isDemo {
+            demoCounter += 1
+            let p = Project(id: "demo-p-\(demoCounter)", name: trimmed, color: color,
+                            clientId: nil, isArchived: false, isBillable: isBillable)
+            projects.append(p); return p
+        }
+        guard let client, let orgId = organizationId else { return nil }
+        do {
+            let p = try await client.createProject(organizationId: orgId, name: trimmed, color: color, isBillable: isBillable)
+            projects.append(p); return p
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            return nil
+        }
+    }
+
+    func createTask(name: String, projectId: String) async -> ProjectTask? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if isDemo {
+            demoCounter += 1
+            let t = ProjectTask(id: "demo-t-\(demoCounter)", name: trimmed, isDone: false, projectId: projectId)
+            tasks.append(t); return t
+        }
+        guard let client, let orgId = organizationId else { return nil }
+        do {
+            let t = try await client.createTask(organizationId: orgId, name: trimmed, projectId: projectId)
+            tasks.append(t); return t
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            return nil
+        }
+    }
+
+    func createTag(name: String) async -> Tag? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if isDemo {
+            demoCounter += 1
+            let t = Tag(id: "demo-g-\(demoCounter)", name: trimmed)
+            tags.append(t); return t
+        }
+        guard let client, let orgId = organizationId else { return nil }
+        do {
+            let t = try await client.createTag(organizationId: orgId, name: trimmed)
+            tags.append(t); return t
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            return nil
+        }
+    }
+
     // MARK: - Timer actions
 
     func startTimer() async {
