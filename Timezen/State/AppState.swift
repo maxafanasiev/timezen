@@ -372,6 +372,43 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Create a brand-new completed entry for a past interval (manual logging).
+    func createManualEntry(description: String,
+                           projectId: String?,
+                           taskId: String?,
+                           tagIds: [String],
+                           billable: Bool,
+                           start: Date,
+                           end: Date) async {
+        let trimmed = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isDemo {
+            demoCounter += 1
+            let e = TimeEntry(
+                id: "demo-\(demoCounter)", start: SolidTimeFormatters.string(from: start),
+                end: SolidTimeFormatters.string(from: end), duration: max(0, Int(end.timeIntervalSince(start))),
+                description: trimmed.isEmpty ? nil : trimmed, taskId: taskId, projectId: projectId,
+                organizationId: selectedMembership?.organizationId, userId: user?.id, tags: tagIds, billable: billable)
+            recentEntries.insert(e, at: 0)
+            dashboardEntries = recentEntries
+            return
+        }
+        guard let client, let orgId = organizationId, let memberId = selectedMembership?.id else { return }
+        isTimerBusy = true
+        errorMessage = nil
+        defer { isTimerBusy = false }
+        let payload = APIClient.TimeEntryPayload(
+            memberId: memberId, projectId: projectId, taskId: taskId,
+            start: SolidTimeFormatters.string(from: start), end: SolidTimeFormatters.string(from: end),
+            billable: billable, description: trimmed.isEmpty ? nil : trimmed,
+            tags: tagIds.isEmpty ? nil : tagIds)
+        do {
+            _ = try await client.createTimeEntry(organizationId: orgId, payload: payload)
+            await refreshEntries()
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
     func deleteEntry(_ entry: TimeEntry) async {
         if isDemo {
             recentEntries.removeAll { $0.id == entry.id }
