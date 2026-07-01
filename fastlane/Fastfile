@@ -25,6 +25,17 @@ platform :ios do
     # Fetch distribution cert + provisioning profile (stored via `match`).
     match(type: "appstore", readonly: ENV["CI"] ? true : false, api_key: api_key)
 
+    # Switch the target to manual signing with the match profile (the project ships with
+    # automatic signing, which can't produce an App Store archive on a CI runner).
+    update_code_signing_settings(
+      path: PROJECT,
+      use_automatic_signing: false,
+      team_id: "2ZAN8NR82A",
+      bundle_identifier: "com.afanasievmaksym.timezen",
+      code_sign_identity: "Apple Distribution",
+      profile_name: "match AppStore com.afanasievmaksym.timezen"
+    )
+
     # Next build number = latest TestFlight build + 1 (keeps uploads monotonic).
     build = latest_testflight_build_number(api_key: api_key, initial_build_number: 0) + 1
     increment_build_number(xcodeproj: PROJECT, build_number: build)
