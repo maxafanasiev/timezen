@@ -4,6 +4,7 @@ import Combine
 import LocalAuthentication
 import UserNotifications
 import ActivityKit
+import WidgetKit
 
 @MainActor
 final class AppState: ObservableObject {
@@ -166,6 +167,36 @@ final class AppState: ObservableObject {
             Task { await old.end(nil, dismissalPolicy: .immediate) }
             liveActivity = nil
         }
+    }
+
+    // MARK: - Home screen widget snapshot
+
+    /// Publish today's total + the running timer to the shared App Group and reload widgets.
+    func updateWidgetSnapshot() {
+        guard let shared = UserDefaults(suiteName: timezenAppGroup) else { return }
+        shared.set(widgetTodaySeconds(), forKey: "todaySeconds")
+        if let active = activeEntry, let start = active.startDate {
+            shared.set(start.timeIntervalSince1970, forKey: "runningStart")
+            shared.set(active.description ?? "", forKey: "runningTitle")
+            let p = project(for: active.projectId)
+            shared.set(p?.name ?? "No project", forKey: "runningProject")
+            shared.set(p?.color ?? "#888888", forKey: "runningColor")
+        } else {
+            shared.set(-1.0, forKey: "runningStart")
+        }
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    private func widgetTodaySeconds() -> Int {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        var total = recentEntries
+            .filter { !$0.isRunning && cal.isDate($0.startDate ?? .distantPast, inSameDayAs: today) }
+            .reduce(0) { $0 + ($1.duration ?? 0) }
+        if let active = activeEntry, let start = active.startDate, cal.isDate(start, inSameDayAs: today) {
+            total += activeElapsedSeconds
+        }
+        return total
     }
 
     private var ticker: AnyCancellable?
@@ -371,6 +402,7 @@ final class AppState: ObservableObject {
         }
         syncTimerReminder()
         syncLiveActivity()
+        updateWidgetSnapshot()
     }
 
     /// On initial load, if a timer is running in a different organization than the one
@@ -806,6 +838,7 @@ final class AppState: ObservableObject {
             tags: Array(draftTagIds), billable: draftBillable)
         syncTimerReminder()
         syncLiveActivity()
+        updateWidgetSnapshot()
     }
 
     private func stopDemoTimer() {
@@ -822,6 +855,7 @@ final class AppState: ObservableObject {
         resetDraft()
         syncTimerReminder()
         syncLiveActivity()
+        updateWidgetSnapshot()
     }
 
     private func demoClone(_ entry: TimeEntry) -> TimeEntry {

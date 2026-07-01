@@ -32,6 +32,8 @@ struct DashboardView: View {
     /// Project ids to include; empty = all. "__none__" represents entries with no project.
     @State private var projectFilter: Set<String> = []
     private static let noProjectKey = "__none__"
+    @State private var exportURL: URL?
+    @State private var showExport = false
 
     private static var initialType: PeriodType {
         #if DEBUG
@@ -146,6 +148,53 @@ struct DashboardView: View {
             .navigationTitle("Dashboard")
             .task(id: reloadKey) { await state.loadDashboard(from: range.from, to: range.to) }
             .refreshable { await state.loadDashboard(from: range.from, to: range.to) }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        exportURL = buildCSV()
+                        showExport = exportURL != nil
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel("Export CSV")
+                    .disabled(rows.isEmpty)
+                }
+            }
+            .sheet(isPresented: $showExport) {
+                if let exportURL { ActivityView(items: [exportURL]) }
+            }
+        }
+    }
+
+    /// Build a CSV of the current range's entries and write it to a temp file.
+    private func buildCSV() -> URL? {
+        let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"
+        let tf = DateFormatter(); tf.dateFormat = "HH:mm:ss"
+        func esc(_ s: String) -> String { "\"" + s.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }
+        var lines = ["Date,Start,End,Duration,Project,Task,Description,Tags,Billable"]
+        let sorted = rows.sorted { ($0.entry.startDate ?? .distantPast) < ($1.entry.startDate ?? .distantPast) }
+        for row in sorted {
+            let e = row.entry
+            let fields = [
+                e.startDate.map { df.string(from: $0) } ?? "",
+                e.startDate.map { tf.string(from: $0) } ?? "",
+                e.endDate.map { tf.string(from: $0) } ?? "",
+                SolidTimeFormatters.hms(e.duration ?? row.seconds),
+                state.project(for: e.projectId)?.name ?? "",
+                state.task(for: e.taskId)?.name ?? "",
+                e.description ?? "",
+                state.tagNames(for: e.tags).joined(separator: "; "),
+                (e.billable ?? false) ? "yes" : "no",
+            ]
+            lines.append(fields.map(esc).joined(separator: ","))
+        }
+        let name = "timezen-\(df.string(from: range.from))_\(df.string(from: range.to)).csv"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        do {
+            try lines.joined(separator: "\n").data(using: .utf8)?.write(to: url)
+            return url
+        } catch {
+            return nil
         }
     }
 
