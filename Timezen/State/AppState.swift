@@ -37,6 +37,10 @@ final class AppState: ObservableObject {
     @Published var dashboardEntries: [TimeEntry] = []
     @Published var dashboardLoading: Bool = false
 
+    // Offline demo / App Review mode (no network; mutations are local).
+    @Published var isDemo: Bool = false
+    private var demoCounter = 0
+
     // Draft used when starting a new timer
     @Published var draftDescription: String = ""
     @Published var draftProjectId: String?
@@ -78,6 +82,11 @@ final class AppState: ObservableObject {
         if let t = ProcessInfo.processInfo.environment["ST_THEME"], let a = AppAppearance(rawValue: t) {
             appearance = a
         }
+        // Demo mode for App Store screenshots — synthetic data, no network.
+        if ProcessInfo.processInfo.environment["ST_DEMO"] == "1" {
+            loadDemoData()
+            return
+        }
         #endif
         #if DEBUG
         // Testing convenience: auto sign-in when launched with ST_HOST / ST_TOKEN in the
@@ -93,7 +102,24 @@ final class AppState: ObservableObject {
             phase = .loggedOut
             return
         }
+        // Restore demo session without hitting the network.
+        if Self.isDemoCredentials(host: storedHost, token: token) {
+            loadDemoData()
+            return
+        }
         await refreshSession()
+    }
+
+    // MARK: - Demo / App Review account
+
+    /// Fixed credentials that unlock an offline demo (given to Apple in App Review Information).
+    static let demoHost = "https://demo.timezen.app"
+    static let demoToken = "timezen-demo-review"
+
+    static func isDemoCredentials(host: String, token: String) -> Bool {
+        let h = normalizedURL(from: host)?.absoluteString.lowercased()
+        let t = token.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return h == demoHost && t == demoToken
     }
 
     /// Attempt sign-in with a host + token, persisting them on success.
@@ -105,6 +131,15 @@ final class AppState: ObservableObject {
         isBusy = true
         errorMessage = nil
         defer { isBusy = false }
+
+        // Demo/review account: fixed credentials load synthetic data with no network.
+        if Self.isDemoCredentials(host: url.absoluteString, token: newToken) {
+            storedHost = url.absoluteString
+            token = newToken
+            Keychain.set(newToken, for: "apiToken")
+            loadDemoData()
+            return
+        }
 
         let probe = APIClient(baseURL: url, token: newToken)
         do {
@@ -159,7 +194,8 @@ final class AppState: ObservableObject {
         memberships = []
         selectedMembership = nil
         projects = []; tasks = []; tags = []; clients = []
-        activeEntry = nil; recentEntries = []
+        activeEntry = nil; recentEntries = []; dashboardEntries = []
+        isDemo = false
         resetDraft()
         ticker = nil
         phase = .loggedOut
@@ -202,6 +238,7 @@ final class AppState: ObservableObject {
     }
 
     func refreshEntries() async {
+        if isDemo { return }   // demo data is local; nothing to fetch
         guard let client, let orgId = organizationId else { return }
 
         // Running timer is user-scoped and always allowed.
@@ -240,6 +277,7 @@ final class AppState: ObservableObject {
     // MARK: - Timer actions
 
     func startTimer() async {
+        if isDemo { startDemoTimer(); return }
         guard let client, let orgId = organizationId, let memberId = selectedMembership?.id else { return }
         isTimerBusy = true
         errorMessage = nil
@@ -264,6 +302,7 @@ final class AppState: ObservableObject {
     }
 
     func stopTimer() async {
+        if isDemo { stopDemoTimer(); return }
         guard let client, let entry = activeEntry else { return }
         // The running entry is user-global and may live in a different organization
         // than the one currently selected — stop it in its OWN organization.
@@ -305,6 +344,11 @@ final class AppState: ObservableObject {
 
     /// Create an identical copy of an entry (same times, project, tags, billable).
     func duplicateEntry(_ entry: TimeEntry) async {
+        if isDemo {
+            recentEntries.insert(demoClone(entry), at: 0)
+            dashboardEntries = recentEntries
+            return
+        }
         guard let client, let orgId = organizationId, let memberId = selectedMembership?.id else { return }
         isTimerBusy = true
         errorMessage = nil
@@ -329,6 +373,12 @@ final class AppState: ObservableObject {
     }
 
     func deleteEntry(_ entry: TimeEntry) async {
+        if isDemo {
+            recentEntries.removeAll { $0.id == entry.id }
+            if activeEntry?.id == entry.id { activeEntry = nil }
+            dashboardEntries = recentEntries
+            return
+        }
         guard let client, let orgId = entry.organizationId ?? organizationId else { return }
         do {
             try await client.deleteTimeEntry(organizationId: orgId, id: entry.id)
@@ -349,6 +399,23 @@ final class AppState: ObservableObject {
                      billable: Bool,
                      start: Date,
                      end: Date?) async {
+        let trimmedDesc = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isDemo {
+            let updated = TimeEntry(
+                id: entry.id, start: SolidTimeFormatters.string(from: start),
+                end: end.map(SolidTimeFormatters.string(from:)),
+                duration: end.map { Int($0.timeIntervalSince(start)) } ?? 0,
+                description: trimmedDesc.isEmpty ? nil : trimmedDesc, taskId: taskId, projectId: projectId,
+                organizationId: entry.organizationId, userId: entry.userId, tags: tagIds, billable: billable)
+            if activeEntry?.id == entry.id {
+                activeEntry = updated.isRunning ? updated : nil
+                if !updated.isRunning { recentEntries.insert(updated, at: 0) }
+            } else if let i = recentEntries.firstIndex(where: { $0.id == entry.id }) {
+                recentEntries[i] = updated
+            }
+            dashboardEntries = recentEntries
+            return
+        }
         guard let client, let entryOrg = entry.organizationId ?? organizationId else { return }
         isTimerBusy = true
         errorMessage = nil
@@ -411,6 +478,7 @@ final class AppState: ObservableObject {
 
     /// Fetch the member's own entries within [from, to] for dashboard statistics.
     func loadDashboard(from: Date, to: Date) async {
+        if isDemo { dashboardEntries = recentEntries; return }   // local demo data
         guard let client, let orgId = organizationId, let memberId = selectedMembership?.id else { return }
         dashboardLoading = true
         defer { dashboardLoading = false }
@@ -448,6 +516,114 @@ final class AppState: ObservableObject {
         ticker = Timer.publish(every: 1, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] date in self?.now = date }
+    }
+
+    // MARK: - Demo data (offline demo / App Review account)
+
+    func loadDemoData() {
+        isDemo = true
+        demoCounter = 0
+        let now = Date()
+        let cal = Calendar.current
+        let org = "org-demo"
+
+        user = User(id: "u1", name: "Alex Rivera", email: "alex@acme.studio",
+                    profilePhotoUrl: nil, timezone: "Europe/Kyiv")
+        let membership = Membership(
+            id: "m1",
+            organization: Membership.Organization(id: org, name: "Acme Studio", currency: "USD"),
+            role: "owner")
+        memberships = [membership]
+        selectedMembership = membership
+
+        projects = [
+            Project(id: "p1", name: "Website Redesign", color: "#3B82F6", clientId: nil, isArchived: false, isBillable: true),
+            Project(id: "p2", name: "Mobile App", color: "#8B5CF6", clientId: nil, isArchived: false, isBillable: true),
+            Project(id: "p3", name: "Marketing", color: "#F59E0B", clientId: nil, isArchived: false, isBillable: false),
+            Project(id: "p4", name: "Client Support", color: "#10B981", clientId: nil, isArchived: false, isBillable: true),
+        ]
+        tasks = [
+            ProjectTask(id: "t1", name: "Landing page", isDone: false, projectId: "p1"),
+            ProjectTask(id: "t2", name: "Onboarding flow", isDone: false, projectId: "p2"),
+            ProjectTask(id: "t3", name: "Q3 campaign", isDone: false, projectId: "p3"),
+        ]
+        tags = [Tag(id: "g1", name: "focus"), Tag(id: "g2", name: "meeting"), Tag(id: "g3", name: "review")]
+        clients = []
+
+        func mk(_ id: String, _ desc: String, _ pid: String?, _ tid: String?, _ tags: [String],
+                _ billable: Bool, day: Int, h: Int, m: Int, minutes: Int) -> TimeEntry {
+            let dayStart = cal.date(byAdding: .day, value: -day, to: cal.startOfDay(for: now))!
+            let s = cal.date(byAdding: DateComponents(hour: h, minute: m), to: dayStart)!
+            let e = s.addingTimeInterval(Double(minutes) * 60)
+            return TimeEntry(id: id, start: SolidTimeFormatters.string(from: s),
+                             end: SolidTimeFormatters.string(from: e), duration: minutes * 60,
+                             description: desc, taskId: tid, projectId: pid, organizationId: org,
+                             userId: "u1", tags: tags, billable: billable)
+        }
+
+        recentEntries = [
+            // Today
+            mk("e1", "Landing page hero section", "p1", "t1", ["g1"], true, day: 0, h: 9, m: 5, minutes: 95),
+            mk("e2", "Standup & sprint planning", "p2", nil, ["g2"], true, day: 0, h: 11, m: 0, minutes: 40),
+            mk("e3", "Q3 email campaign draft", "p3", "t3", [], false, day: 0, h: 12, m: 30, minutes: 75),
+            mk("e4", "Customer bug triage", "p4", nil, ["g3"], true, day: 0, h: 14, m: 20, minutes: 65),
+            // Yesterday
+            mk("e5", "Onboarding flow build", "p2", "t2", ["g1"], true, day: 1, h: 9, m: 30, minutes: 150),
+            mk("e6", "Design review", "p1", nil, ["g3"], true, day: 1, h: 13, m: 0, minutes: 80),
+            mk("e7", "Support inbox", "p4", nil, [], true, day: 1, h: 15, m: 0, minutes: 95),
+            // Earlier this week
+            mk("e8", "Component library", "p2", "t2", ["g1"], true, day: 2, h: 10, m: 0, minutes: 180),
+            mk("e9", "Landing copy polish", "p1", "t1", [], true, day: 2, h: 14, m: 30, minutes: 70),
+            mk("e10", "Analytics dashboard", "p3", nil, ["g1"], false, day: 3, h: 9, m: 45, minutes: 140),
+            mk("e11", "Release checklist", "p2", nil, ["g2"], true, day: 3, h: 13, m: 30, minutes: 90),
+            mk("e12", "Client call — Northwind", "p4", nil, ["g2"], true, day: 4, h: 11, m: 0, minutes: 55),
+            mk("e13", "Homepage A/B test", "p1", "t1", ["g1"], true, day: 4, h: 14, m: 0, minutes: 120),
+        ]
+        dashboardEntries = recentEntries
+
+        // Running entry started 37 minutes ago.
+        let start = now.addingTimeInterval(-37 * 60)
+        activeEntry = TimeEntry(id: "active", start: SolidTimeFormatters.string(from: start), end: nil,
+                                duration: 0, description: "Prototype polish", taskId: "t2", projectId: "p2",
+                                organizationId: org, userId: "u1", tags: ["g1"], billable: true)
+
+        errorMessage = nil
+        phase = .ready
+        startTicker()
+    }
+
+    // Local (offline) demo mutations.
+
+    private func startDemoTimer() {
+        demoCounter += 1
+        let desc = draftDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        activeEntry = TimeEntry(
+            id: "demo-\(demoCounter)", start: SolidTimeFormatters.string(from: Date()), end: nil,
+            duration: 0, description: desc.isEmpty ? nil : desc, taskId: draftTaskId, projectId: draftProjectId,
+            organizationId: selectedMembership?.organizationId, userId: user?.id,
+            tags: Array(draftTagIds), billable: draftBillable)
+    }
+
+    private func stopDemoTimer() {
+        guard let entry = activeEntry, let start = entry.startDate else { return }
+        let end = Date()
+        let stopped = TimeEntry(
+            id: entry.id, start: entry.start, end: SolidTimeFormatters.string(from: end),
+            duration: max(0, Int(end.timeIntervalSince(start))), description: entry.description,
+            taskId: entry.taskId, projectId: entry.projectId, organizationId: entry.organizationId,
+            userId: entry.userId, tags: entry.tags, billable: entry.billable)
+        recentEntries.insert(stopped, at: 0)
+        dashboardEntries = recentEntries
+        activeEntry = nil
+        resetDraft()
+    }
+
+    private func demoClone(_ entry: TimeEntry) -> TimeEntry {
+        demoCounter += 1
+        return TimeEntry(
+            id: "demo-\(demoCounter)", start: entry.start, end: entry.end, duration: entry.duration,
+            description: entry.description, taskId: entry.taskId, projectId: entry.projectId,
+            organizationId: entry.organizationId, userId: entry.userId, tags: entry.tags, billable: entry.billable)
     }
 
     // MARK: - URL normalization
