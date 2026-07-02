@@ -22,19 +22,20 @@ platform :ios do
     # Keychain + non-interactive setup on CI runners.
     setup_ci if ENV["CI"]
 
-    # Fetch distribution cert + provisioning profile (stored via `match`).
-    match(type: "appstore", readonly: ENV["CI"] ? true : false, api_key: api_key)
+    # Fetch distribution cert + provisioning profiles (app + widget) stored via `match`.
+    app_id = "com.afanasievmaksym.timezen"
+    widget_id = "com.afanasievmaksym.timezen.TimezenWidgets"
+    match(type: "appstore", app_identifier: [app_id, widget_id],
+          readonly: ENV["CI"] ? true : false, api_key: api_key)
 
-    # Switch the target to manual signing with the match profile (the project ships with
-    # automatic signing, which can't produce an App Store archive on a CI runner).
-    update_code_signing_settings(
-      path: PROJECT,
-      use_automatic_signing: false,
-      team_id: "2ZAN8NR82A",
-      bundle_identifier: "com.afanasievmaksym.timezen",
-      code_sign_identity: "Apple Distribution",
-      profile_name: "match AppStore com.afanasievmaksym.timezen"
-    )
+    # Switch both targets to manual signing with their match profiles (the project ships
+    # with automatic signing, which can't produce an App Store archive on a CI runner).
+    update_code_signing_settings(path: PROJECT, use_automatic_signing: false, team_id: "2ZAN8NR82A",
+                                 targets: ["Timezen"], code_sign_identity: "Apple Distribution",
+                                 profile_name: "match AppStore #{app_id}")
+    update_code_signing_settings(path: PROJECT, use_automatic_signing: false, team_id: "2ZAN8NR82A",
+                                 targets: ["TimezenWidgets"], code_sign_identity: "Apple Distribution",
+                                 profile_name: "match AppStore #{widget_id}")
 
     # Next build number = latest TestFlight build + 1 (keeps uploads monotonic).
     build = latest_testflight_build_number(api_key: api_key, initial_build_number: 0) + 1
@@ -48,7 +49,8 @@ platform :ios do
       export_options: {
         signingStyle: "manual",
         provisioningProfiles: {
-          "com.afanasievmaksym.timezen" => "match AppStore com.afanasievmaksym.timezen"
+          app_id => "match AppStore #{app_id}",
+          widget_id => "match AppStore #{widget_id}",
         }
       }
     )
