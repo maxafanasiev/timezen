@@ -186,4 +186,28 @@ struct APIClient {
     func deleteTimeEntry(organizationId: String, id: String) async throws {
         _ = try await send(try request("DELETE", "/organizations/\(organizationId)/time-entries/\(id)"))
     }
+
+    // MARK: Create project / task / tag
+
+    private struct ProjectPayload: Encodable { let name: String; let color: String; let is_billable: Bool }
+    private struct TaskPayload: Encodable { let name: String; let project_id: String }
+    private struct TagPayload: Encodable { let name: String }
+
+    func createProject(organizationId: String, name: String, color: String, isBillable: Bool) async throws -> Project {
+        let body = try JSONEncoder().encode(ProjectPayload(name: name, color: color, is_billable: isBillable))
+        let data = try await send(try request("POST", "/organizations/\(organizationId)/projects", body: body))
+        return try decode(DataEnvelope<Project>.self, from: data).data
+    }
+
+    func createTask(organizationId: String, name: String, projectId: String) async throws -> ProjectTask {
+        let body = try JSONEncoder().encode(TaskPayload(name: name, project_id: projectId))
+        let data = try await send(try request("POST", "/organizations/\(organizationId)/tasks", body: body))
+        return try decode(DataEnvelope<ProjectTask>.self, from: data).data
+    }
+
+    func createTag(organizationId: String, name: String) async throws -> Tag {
+        let body = try JSONEncoder().encode(TagPayload(name: name))
+        let data = try await send(try request("POST", "/organizations/\(organizationId)/tags", body: body))
+        return try decode(DataEnvelope<Tag>.self, from: data).data
+    }
 }

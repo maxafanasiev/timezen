@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct TimezenApp: App {
     @StateObject private var state = AppState()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -11,6 +12,9 @@ struct TimezenApp: App {
                 .task { await state.bootstrap() }
                 .tint(.accentColor)
                 .preferredColorScheme(state.appearance.colorScheme)
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .background { state.lockNow() }
+                }
         }
     }
 }

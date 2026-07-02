@@ -6,22 +6,74 @@
 	objectVersion = 70;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		2B000000000000000000000C /* TimerActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B000000000000000000000B /* TimerActivityAttributes.swift */; };
+		2B0000000000000000000011 /* TimerActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B000000000000000000000B /* TimerActivityAttributes.swift */; };
+		2B000000000000000000000E /* TimezenWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2B000000000000000000000A /* TimezenWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		2B0000000000000000000010 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1A2B3C4D0000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2B0000000000000000000001;
+			remoteInfo = TimezenWidgets;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		2B000000000000000000000D /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				2B000000000000000000000E /* TimezenWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		2B000000000000000000000B /* TimerActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/TimerActivityAttributes.swift; sourceTree = "<group>"; };
+		2B000000000000000000000A /* TimezenWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TimezenWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
 		1A2B3C4D0000000000000010 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				Timezen.entitlements,
 			);
 			target = 1A2B3C4D0000000000000005 /* Timezen */;
+		};
+		2B0000000000000000000003 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				TimezenWidgets.entitlements,
+			);
+			target = 2B0000000000000000000001 /* TimezenWidgets */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		1A2B3C4D0000000000000009 /* Timezen */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (1A2B3C4D0000000000000010 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = Timezen; sourceTree = "<group>"; };
+		2B0000000000000000000002 /* TimezenWidgets */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (2B0000000000000000000003 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = TimezenWidgets; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		1A2B3C4D0000000000000007 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2B0000000000000000000005 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -34,7 +86,9 @@
 		1A2B3C4D0000000000000002 = {
 			isa = PBXGroup;
 			children = (
+				2B000000000000000000000B /* TimerActivityAttributes.swift */,
 				1A2B3C4D0000000000000009 /* Timezen */,
+				2B0000000000000000000002 /* TimezenWidgets */,
 				1A2B3C4D0000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -42,6 +96,7 @@
 		1A2B3C4D0000000000000003 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				2B000000000000000000000A /* TimezenWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -56,10 +111,12 @@
 				1A2B3C4D0000000000000006 /* Sources */,
 				1A2B3C4D0000000000000007 /* Frameworks */,
 				1A2B3C4D0000000000000008 /* Resources */,
+				2B000000000000000000000D /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				2B000000000000000000000F /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				1A2B3C4D0000000000000009 /* Timezen */,
@@ -67,6 +124,26 @@
 			name = Timezen;
 			productName = Timezen;
 			productType = "com.apple.product-type.application";
+		};
+		2B0000000000000000000001 /* TimezenWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2B0000000000000000000007 /* Build configuration list for PBXNativeTarget "TimezenWidgets" */;
+			buildPhases = (
+				2B0000000000000000000004 /* Sources */,
+				2B0000000000000000000005 /* Frameworks */,
+				2B0000000000000000000006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				2B0000000000000000000002 /* TimezenWidgets */,
+			);
+			name = TimezenWidgets;
+			productName = TimezenWidgets;
+			productReference = 2B000000000000000000000A /* TimezenWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -79,6 +156,9 @@
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					1A2B3C4D0000000000000005 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					2B0000000000000000000001 = {
 						CreatedOnToolsVersion = 16.0;
 					};
 				};
@@ -98,12 +178,20 @@
 			projectRoot = "";
 			targets = (
 				1A2B3C4D0000000000000005 /* Timezen */,
+				2B0000000000000000000001 /* TimezenWidgets */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		1A2B3C4D0000000000000008 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2B0000000000000000000006 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -117,10 +205,27 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2B0000000000000000000011 /* TimerActivityAttributes.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2B0000000000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2B000000000000000000000C /* TimerActivityAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		2B000000000000000000000F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2B0000000000000000000001 /* TimezenWidgets */;
+			targetProxy = 2B0000000000000000000010 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		1A2B3C4D000000000000000C /* Debug */ = {
@@ -246,6 +351,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				CODE_SIGN_ENTITLEMENTS = Timezen/Timezen.entitlements;
 				DEVELOPMENT_TEAM = 2ZAN8NR82A;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -274,6 +380,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				CODE_SIGN_ENTITLEMENTS = Timezen/Timezen.entitlements;
 				DEVELOPMENT_TEAM = 2ZAN8NR82A;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -288,6 +395,65 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.afanasievmaksym.timezen;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		2B0000000000000000000008 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				CODE_SIGN_ENTITLEMENTS = TimezenWidgets/TimezenWidgets.entitlements;
+				DEVELOPMENT_TEAM = 2ZAN8NR82A;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TimezenWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Timezen;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.afanasievmaksym.timezen.TimezenWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		2B0000000000000000000009 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				CODE_SIGN_ENTITLEMENTS = TimezenWidgets/TimezenWidgets.entitlements;
+				DEVELOPMENT_TEAM = 2ZAN8NR82A;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TimezenWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Timezen;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.afanasievmaksym.timezen.TimezenWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -311,6 +477,15 @@
 			buildConfigurations = (
 				1A2B3C4D000000000000000E /* Debug */,
 				1A2B3C4D000000000000000F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2B0000000000000000000007 /* Build configuration list for PBXNativeTarget "TimezenWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2B0000000000000000000008 /* Debug */,
+				2B0000000000000000000009 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

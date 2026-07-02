@@ -8,6 +8,8 @@ struct HomeView: View {
     @State private var editingEntry: TimeEntry?
     @State private var showProjectPicker = false
     @State private var showTagPicker = false
+    @State private var showNewEntry = false
+    @State private var searchText = ""
 
     private var isRunning: Bool { state.activeEntry != nil }
 
@@ -18,18 +20,33 @@ struct HomeView: View {
                 Divider()
                 historyList
             }
-            .navigationTitle(state.selectedMembership?.organizationName ?? "SolidTime")
+            .navigationTitle(state.selectedMembership?.organizationName ?? "Timezen")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showNewEntry = true } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Add entry")
+                }
+            }
+            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic),
+                        prompt: "Search description, project, tag")
+            .sheet(isPresented: $showNewEntry) {
+                EntryEditView()
+            }
             .sheet(item: $editingEntry) { entry in
                 EntryEditView(entry: entry)
             }
             #if DEBUG
             .task(id: debugEditKey) {
-                // Testing convenience: ST_EDIT=active|first opens the edit sheet automatically.
-                guard editingEntry == nil else { return }
+                // Testing convenience: ST_EDIT=active|first|new opens a sheet automatically.
+                guard editingEntry == nil, !showNewEntry else { return }
                 switch ProcessInfo.processInfo.environment["ST_EDIT"] {
                 case "active": editingEntry = state.activeEntry
                 case "first": editingEntry = state.recentEntries.first { !$0.isRunning }
+                case "new": showNewEntry = true
+                case "projpick": showProjectPicker = true
                 default: break
                 }
             }
@@ -130,9 +147,20 @@ struct HomeView: View {
         let totalSeconds: Int
     }
 
+    /// True if the entry matches the current search query (description, project or tag).
+    private func matchesSearch(_ entry: TimeEntry) -> Bool {
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return true }
+        if entry.description?.localizedCaseInsensitiveContains(q) == true { return true }
+        if state.project(for: entry.projectId)?.name.localizedCaseInsensitiveContains(q) == true { return true }
+        if state.task(for: entry.taskId)?.name.localizedCaseInsensitiveContains(q) == true { return true }
+        if state.tagNames(for: entry.tags).contains(where: { $0.localizedCaseInsensitiveContains(q) }) { return true }
+        return false
+    }
+
     private var groups: [DayGroup] {
         let cal = Calendar.current
-        let completed = state.recentEntries.filter { !$0.isRunning }
+        let completed = state.recentEntries.filter { !$0.isRunning && matchesSearch($0) }
         let byDay = Dictionary(grouping: completed) { entry -> Date in
             cal.startOfDay(for: entry.startDate ?? .distantPast)
         }
@@ -147,7 +175,10 @@ struct HomeView: View {
 
     @ViewBuilder private var historyList: some View {
         if groups.isEmpty {
-            if state.entriesRestricted {
+            if !searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+                EmptyStateView(icon: "magnifyingglass", title: "No matches",
+                               message: "No entries match “\(searchText)”.")
+            } else if state.entriesRestricted {
                 EmptyStateView(icon: "lock", title: "History not available",
                                message: "Your role in this organization doesn't allow viewing the time-entry history. You can still track time.")
             } else {

@@ -7,7 +7,8 @@ struct EntryEditView: View {
     @EnvironmentObject var state: AppState
     @Environment(\.dismiss) private var dismiss
 
-    let entry: TimeEntry
+    /// The entry being edited, or nil when creating a brand-new manual entry.
+    let existing: TimeEntry?
 
     @State private var description: String
     @State private var projectId: String?
@@ -22,10 +23,11 @@ struct EntryEditView: View {
     @State private var showDeleteConfirm = false
     @State private var editingDuration = false
 
-    private var isRunning: Bool { entry.isRunning }
+    private var isRunning: Bool { existing?.isRunning ?? false }
+    private var isNew: Bool { existing == nil }
 
     init(entry: TimeEntry) {
-        self.entry = entry
+        self.existing = entry
         _description = State(initialValue: entry.description ?? "")
         _projectId = State(initialValue: entry.projectId)
         _taskId = State(initialValue: entry.taskId)
@@ -33,6 +35,19 @@ struct EntryEditView: View {
         _billable = State(initialValue: entry.billable ?? false)
         _start = State(initialValue: entry.startDate ?? Date())
         _end = State(initialValue: entry.endDate)
+    }
+
+    /// New manual entry — defaults to the previous hour.
+    init() {
+        self.existing = nil
+        let now = Date()
+        _description = State(initialValue: "")
+        _projectId = State(initialValue: nil)
+        _taskId = State(initialValue: nil)
+        _tagIds = State(initialValue: [])
+        _billable = State(initialValue: false)
+        _start = State(initialValue: now.addingTimeInterval(-3600))
+        _end = State(initialValue: now)
     }
 
     private var durationSeconds: Int {
@@ -173,14 +188,16 @@ struct EntryEditView: View {
                     }
                 }
 
-                Section {
-                    Button(role: .destructive) { showDeleteConfirm = true } label: {
-                        Label("Delete entry", systemImage: "trash")
-                            .frame(maxWidth: .infinity)
+                if !isNew {
+                    Section {
+                        Button(role: .destructive) { showDeleteConfirm = true } label: {
+                            Label("Delete entry", systemImage: "trash")
+                                .frame(maxWidth: .infinity)
+                        }
                     }
                 }
             }
-            .navigationTitle(isRunning ? "Running Entry" : "Edit Entry")
+            .navigationTitle(isNew ? "New Entry" : (isRunning ? "Running Entry" : "Edit Entry"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -199,7 +216,7 @@ struct EntryEditView: View {
             }
             .confirmationDialog("Delete this entry?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
                 Button("Delete", role: .destructive) {
-                    Task { await state.deleteEntry(entry); dismiss() }
+                    if let existing { Task { await state.deleteEntry(existing); dismiss() } }
                 }
                 Button("Cancel", role: .cancel) {}
             }
@@ -217,16 +234,28 @@ struct EntryEditView: View {
     }
 
     private func save() async {
-        await state.updateEntry(
-            entry,
-            description: description,
-            projectId: projectId,
-            taskId: taskId,
-            tagIds: Array(tagIds),
-            billable: billable,
-            start: start,
-            end: isRunning ? nil : end
-        )
+        if let existing {
+            await state.updateEntry(
+                existing,
+                description: description,
+                projectId: projectId,
+                taskId: taskId,
+                tagIds: Array(tagIds),
+                billable: billable,
+                start: start,
+                end: isRunning ? nil : end
+            )
+        } else {
+            await state.createManualEntry(
+                description: description,
+                projectId: projectId,
+                taskId: taskId,
+                tagIds: Array(tagIds),
+                billable: billable,
+                start: start,
+                end: end ?? Date()
+            )
+        }
         if state.errorMessage == nil { dismiss() }
     }
 }

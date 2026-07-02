@@ -47,6 +47,15 @@ struct TagChips: View {
     }
 }
 
+/// UIKit share sheet wrapper for exporting a file (e.g. a CSV).
+struct ActivityView: UIViewControllerRepresentable {
+    let items: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+
 /// Empty-state placeholder.
 struct EmptyStateView: View {
     let icon: String
