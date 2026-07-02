@@ -174,6 +174,11 @@ final class AppState: ObservableObject {
     /// Publish today's total + the running timer to the shared App Group and reload widgets.
     func updateWidgetSnapshot() {
         guard let shared = UserDefaults(suiteName: timezenAppGroup) else { return }
+        // Credentials so the widget's Start/Stop button can hit the API directly.
+        shared.set(storedHost, forKey: "host")
+        shared.set(token, forKey: "token")
+        shared.set(organizationId ?? "", forKey: "orgId")
+        shared.set(selectedMembership?.id ?? "", forKey: "memberId")
         shared.set(widgetTodaySeconds(), forKey: "todaySeconds")
         if let active = activeEntry, let start = active.startDate {
             shared.set(start.timeIntervalSince1970, forKey: "runningStart")

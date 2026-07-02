@@ -43,19 +43,19 @@ struct TodayProvider: TimelineProvider {
 struct TodayWidgetView: View {
     var entry: TodayEntry
 
+    private var running: Bool { entry.runningStart != nil }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: "timer").foregroundStyle(.tint)
                 Text("Today").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             }
             Text(timezenDurationHMS(entry.todaySeconds))
-                .font(.system(.title, design: .rounded).weight(.semibold))
+                .font(.system(.title2, design: .rounded).weight(.semibold))
                 .monospacedDigit()
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
-
-            Spacer(minLength: 0)
 
             if let start = entry.runningStart {
                 HStack(spacing: 6) {
@@ -65,11 +65,25 @@ struct TodayWidgetView: View {
                     Spacer(minLength: 4)
                     Text(start, style: .timer)
                         .font(.caption2.monospacedDigit().weight(.medium))
-                        .frame(maxWidth: 52, alignment: .trailing)
+                        .minimumScaleFactor(0.5)
+                        .frame(maxWidth: 64, alignment: .trailing)
                 }
-            } else {
-                Text("No timer running").font(.caption2).foregroundStyle(.secondary)
             }
+
+            Spacer(minLength: 0)
+
+            Button(intent: ToggleTimerIntent()) {
+                HStack(spacing: 5) {
+                    Image(systemName: running ? "stop.fill" : "play.fill")
+                    Text(running ? "Stop" : "Start")
+                }
+                .font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 7)
+                .background(running ? Color.red : Color.accentColor, in: Capsule())
+                .foregroundStyle(.white)
+            }
+            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }

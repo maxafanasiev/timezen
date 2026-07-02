@@ -28,10 +28,14 @@ struct TimerLiveActivity: Widget {
                     Text(title(context.state)).font(.subheadline).lineLimit(1)
                 }
             } compactLeading: {
-                Image(systemName: "timer")
+                Circle().fill(hexColor(context.state.projectColorHex)).frame(width: 9, height: 9)
             } compactTrailing: {
                 Text(context.state.startedAt, style: .timer)
-                    .monospacedDigit().frame(maxWidth: 44)
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .monospacedDigit()
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                    .frame(maxWidth: 70)
             } minimal: {
                 Image(systemName: "timer")
             }
