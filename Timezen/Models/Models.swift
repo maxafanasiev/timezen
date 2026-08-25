@@ -236,3 +236,23 @@ struct OrgReport {
         self.members = members
     }
 }
+
+// MARK: - Organization settings
+
+/// `/organizations/{id}` — the settings that decide what an employee may do.
+struct OrganizationDetail: Decodable {
+    let id: String
+    let name: String
+    let currency: String?
+    let currencySymbol: String?
+    /// Employees may manage tasks in projects they can access when this is on.
+    let employeesCanManageTasks: Bool?
+    let employeesCanSeeBillableRates: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, currency
+        case currencySymbol = "currency_symbol"
+        case employeesCanManageTasks = "employees_can_manage_tasks"
+        case employeesCanSeeBillableRates = "employees_can_see_billable_rates"
+    }
+}

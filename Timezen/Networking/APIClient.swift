@@ -129,6 +129,12 @@ struct APIClient {
         return try decode(CollectionEnvelope<TimeEntry>.self, from: data).data
     }
 
+    /// Organization settings (currency, what employees are allowed to do).
+    func organization(id: String) async throws -> OrganizationDetail {
+        let data = try await send(try request("GET", "/organizations/\(id)"))
+        return try decode(DataEnvelope<OrganizationDetail>.self, from: data).data
+    }
+
     /// Organization members. Requires `members:view` — employees get a 403.
     func members(organizationId: String) async throws -> [Member] {
         let data = try await send(try request("GET", "/organizations/\(organizationId)/members"))
@@ -224,18 +230,40 @@ struct APIClient {
     private struct ProjectPayload: Encodable {
         let name: String
         let color: String
-        let is_billable: Bool
+        let isBillable: Bool
         /// Public projects are visible to every member of the organization; private ones
         /// only to admins and the members assigned to them. The API defaults to private.
-        let is_public: Bool
+        let isPublic: Bool
+        let clientId: String?
+
+        enum CodingKeys: String, CodingKey {
+            case name, color
+            case isBillable = "is_billable"
+            case isPublic = "is_public"
+            case clientId = "client_id"
+        }
+
+        // `client_id` is validated as "present": the key has to be in the body even when
+        // there's no client, so nil is encoded as an explicit null rather than omitted.
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(name, forKey: .name)
+            try c.encode(color, forKey: .color)
+            try c.encode(isBillable, forKey: .isBillable)
+            try c.encode(isPublic, forKey: .isPublic)
+            if let clientId { try c.encode(clientId, forKey: .clientId) }
+            else { try c.encodeNil(forKey: .clientId) }
+        }
     }
     private struct TaskPayload: Encodable { let name: String; let project_id: String }
     private struct TagPayload: Encodable { let name: String }
 
     func createProject(organizationId: String, name: String, color: String,
-                       isBillable: Bool, isPublic: Bool) async throws -> Project {
-        let body = try JSONEncoder().encode(ProjectPayload(name: name, color: color,
-                                                           is_billable: isBillable, is_public: isPublic))
+                       isBillable: Bool, isPublic: Bool, clientId: String? = nil) async throws -> Project {
+        // The API's colour rule is `^#[0-9a-f]{6}$` — uppercase hex is rejected.
+        let payload = ProjectPayload(name: name, color: color.lowercased(),
+                                     isBillable: isBillable, isPublic: isPublic, clientId: clientId)
+        let body = try JSONEncoder().encode(payload)
         let data = try await send(try request("POST", "/organizations/\(organizationId)/projects", body: body))
         return try decode(DataEnvelope<Project>.self, from: data).data
     }

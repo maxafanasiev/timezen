@@ -171,10 +171,28 @@ struct DashboardView: View {
             return report.projects.map { ($0.key ?? Self.noProjectKey, $0.seconds, $0.cost) }
         }
         var totals: [String: Int] = [:]
-        for row in rows { totals[row.entry.projectId ?? Self.noProjectKey, default: 0] += row.seconds }
+        var billable: [String: Int] = [:]
+        for row in rows {
+            let key = row.entry.projectId ?? Self.noProjectKey
+            totals[key, default: 0] += row.seconds
+            if row.entry.billable == true { billable[key, default: 0] += row.seconds }
+        }
         return totals
-            .map { (key: $0.key, seconds: $0.value, cost: nil) }
+            .map { (key: $0.key,
+                    seconds: $0.value,
+                    cost: state.localCostCents(forBillableSeconds: billable[$0.key] ?? 0)) }
             .sorted { ($0.seconds, $1.key) > ($1.seconds, $0.key) }
+    }
+
+    /// Seconds on billable entries in the personal scope — the basis for the local
+    /// rate estimate when the server doesn't share money.
+    private var billableSeconds: Int {
+        rows.filter { $0.entry.billable == true }.reduce(0) { $0 + $1.seconds }
+    }
+
+    /// True when the amounts shown are the app's own estimate rather than the server's.
+    private var isEstimatedCost: Bool {
+        !isTeamScope && state.report?.totalCost == nil && state.hasLocalRate
     }
 
     /// Money for the current selection: from the report for every scope, including `.me`
@@ -183,7 +201,9 @@ struct DashboardView: View {
         if isTeamScope { return teamReport?.totalCost }
         // The personal totals are computed locally, so the report's money only lines up
         // with what's on screen while no project filter is applied.
-        return projectFilter.isEmpty ? state.report?.totalCost : nil
+        if projectFilter.isEmpty, let cost = state.report?.totalCost { return cost }
+        // Server withheld the rates — fall back to the rate the user entered in Settings.
+        return state.localCostCents(forBillableSeconds: billableSeconds)
     }
 
     private var isLoading: Bool {
@@ -480,7 +500,8 @@ struct DashboardView: View {
             // billable rates from members who may not see them.
             if let cents = scopeCostCents, !isLoading {
                 VStack(alignment: .trailing, spacing: 4) {
-                    Text("Billable").font(.subheadline).foregroundStyle(.secondary)
+                    Text(isEstimatedCost ? "Billable (estimate)" : "Billable")
+                        .font(.subheadline).foregroundStyle(.secondary)
                     Text(SolidTimeFormatters.money(cents: cents, currency: state.currency))
                         .font(.title2.bold()).monospacedDigit()
                         .lineLimit(1).minimumScaleFactor(0.6)

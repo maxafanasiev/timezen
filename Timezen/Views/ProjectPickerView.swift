@@ -16,6 +16,11 @@ struct ProjectPickerView: View {
         return active.filter { $0.name.localizedCaseInsensitiveContains(search) }
     }
 
+    private var errorAlert: Binding<Bool> {
+        Binding(get: { state.errorMessage != nil },
+                set: { if !$0 { state.errorMessage = nil } })
+    }
+
     private var tasksForSelected: [ProjectTask] {
         guard let pid = selectedProjectId else { return [] }
         return state.tasks.filter { $0.projectId == pid && !($0.isDone ?? false) }
@@ -41,7 +46,7 @@ struct ProjectPickerView: View {
                     }
                 }
 
-                Section("Projects") {
+                Section {
                     ForEach(filteredProjects) { project in
                         Button {
                             if selectedProjectId != project.id { selectedTaskId = nil }
@@ -57,6 +62,12 @@ struct ProjectPickerView: View {
                                 }
                             }
                         }
+                    }
+                } header: {
+                    Text("Projects")
+                } footer: {
+                    if !state.canCreateProjects {
+                        Text("Your role in this organization doesn't allow creating projects.")
                     }
                 }
 
@@ -89,6 +100,7 @@ struct ProjectPickerView: View {
                         Button { newTaskName = ""; showNewTask = true } label: {
                             Label("New task", systemImage: "plus.circle")
                         }
+                        .disabled(!state.canCreateTasks)
                     }
                 }
             }
@@ -101,18 +113,27 @@ struct ProjectPickerView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { showNewProject = true } label: { Image(systemName: "plus") }
                         .accessibilityLabel("New project")
+                        // Employees can't create projects; the server would 403.
+                        .disabled(!state.canCreateProjects)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
             }
+            .alert("Couldn't save", isPresented: errorAlert) {
+                Button("OK", role: .cancel) { state.errorMessage = nil }
+            } message: {
+                Text(state.errorMessage ?? "")
+            }
             .sheet(isPresented: $showNewProject) {
                 CreateProjectSheet { name, color, billable, isPublic in
-                    if let p = await state.createProject(name: name, color: color,
-                                                         isBillable: billable, isPublic: isPublic) {
-                        selectedProjectId = p.id
-                        selectedTaskId = nil
+                    guard let p = await state.createProject(name: name, color: color,
+                                                            isBillable: billable, isPublic: isPublic) else {
+                        return false
                     }
+                    selectedProjectId = p.id
+                    selectedTaskId = nil
+                    return true
                 }
             }
             .alert("New task", isPresented: $showNewTask) {
@@ -132,16 +153,19 @@ struct ProjectPickerView: View {
 struct CreateProjectSheet: View {
     @EnvironmentObject var state: AppState
     @Environment(\.dismiss) private var dismiss
-    let onCreate: (String, String, Bool, Bool) async -> Void
+    /// Returns true when the project was created; a failure keeps the sheet open so the
+    /// entered name isn't lost.
+    let onCreate: (String, String, Bool, Bool) async -> Bool
 
     @State private var name = ""
-    @State private var color = "#3B82F6"
+    @State private var color = "#3b82f6"
     @State private var billable = false
     @State private var isPublic = false
     @State private var busy = false
 
-    private let palette = ["#3B82F6", "#8B5CF6", "#F59E0B", "#10B981", "#EF4444",
-                           "#EC4899", "#14B8A6", "#6366F1", "#F97316", "#84CC16"]
+    // Lowercase hex: the API's colour rule is `^#[0-9a-f]{6}$`.
+    private let palette = ["#3b82f6", "#8b5cf6", "#f59e0b", "#10b981", "#ef4444",
+                           "#ec4899", "#14b8a6", "#6366f1", "#f97316", "#84cc16"]
 
     var body: some View {
         NavigationStack {
@@ -178,7 +202,11 @@ struct CreateProjectSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Create") {
                         busy = true
-                        Task { await onCreate(name, color, billable, isPublic); dismiss() }
+                        Task {
+                            let created = await onCreate(name, color, billable, isPublic)
+                            busy = false
+                            if created { dismiss() }
+                        }
                     }
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || busy)
                 }
@@ -223,6 +251,7 @@ struct TagPickerView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { newTagName = ""; showNewTag = true } label: { Image(systemName: "plus") }
                         .accessibilityLabel("New tag")
+                        .disabled(!state.canCreateTags)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }

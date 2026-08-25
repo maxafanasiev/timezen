@@ -57,6 +57,8 @@ final class AppState: ObservableObject {
     @Published var membersProbed: Bool = false
     /// Why the team views are (un)available — surfaced in Settings, because otherwise a
     /// server that doesn't support them just looks like "nothing changed".
+    /// Organization settings — currency and what employees are allowed to do.
+    @Published var organizationDetail: OrganizationDetail?
     @Published var membersStatus: EndpointStatus = .unknown
     @Published var reportStatus: EndpointStatus = .unknown
 
@@ -391,7 +393,7 @@ final class AppState: ObservableObject {
         projects = []; tasks = []; tags = []; clients = []
         activeEntry = nil; recentEntries = []; dashboardEntries = []
         members = []; report = nil; reportRestricted = false; membersProbed = false
-        membersStatus = .unknown; reportStatus = .unknown
+        membersStatus = .unknown; reportStatus = .unknown; organizationDetail = nil
         entriesLoaded = false
         isDemo = false
         resetDraft()
@@ -413,7 +415,7 @@ final class AppState: ObservableObject {
         storedOrgId = membership.organizationId
         projects = []; tasks = []; tags = []; clients = []
         members = []; report = nil; reportRestricted = false; membersProbed = false
-        membersStatus = .unknown; reportStatus = .unknown
+        membersStatus = .unknown; reportStatus = .unknown; organizationDetail = nil
         recentEntries = []; entriesLoaded = false
         resetDraft()
         await loadOrganizationData()
@@ -439,7 +441,10 @@ final class AppState: ObservableObject {
             clients = try await c
             // Probe the team endpoints once per organization so Settings can report
             // whether this server supports them, even before the dashboard is opened.
-            if !membersProbed { await loadMembers() }
+            if !membersProbed {
+                organizationDetail = try? await client.organization(id: orgId)
+                await loadMembers()
+            }
         } catch {
             if !silent {
                 errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
@@ -861,6 +866,39 @@ final class AppState: ObservableObject {
 
     /// Currency of the selected organization (ISO 4217), used to format money.
     var currency: String { selectedMembership?.organization.currency ?? "USD" }
+
+    /// The signed-in member's role in the selected organization.
+    var role: String? { selectedMembership?.role }
+
+    /// Personal hourly rate used only as a local estimate when the server withholds
+    /// billable rates (an employee usually can't see them). Zero disables it.
+    @Published var localHourlyRate: Double = UserDefaults.standard.double(forKey: "timezen.localRate") {
+        didSet { UserDefaults.standard.set(localHourlyRate, forKey: "timezen.localRate") }
+    }
+
+    var hasLocalRate: Bool { localHourlyRate > 0 }
+
+    /// Estimate money for `seconds` at the local rate, in cents.
+    func localCostCents(forBillableSeconds seconds: Int) -> Int? {
+        guard hasLocalRate, seconds > 0 else { return hasLocalRate ? 0 : nil }
+        return Int((Double(seconds) / 3600.0 * localHourlyRate * 100).rounded())
+    }
+
+    /// Roles that may create projects, tags and clients (`projects:create` & co).
+    private static let managingRoles: Set<String> = ["owner", "admin", "manager"]
+
+    var canCreateProjects: Bool {
+        guard let role else { return true }   // unknown role: let the server decide
+        return Self.managingRoles.contains(role)
+    }
+
+    var canCreateTags: Bool { canCreateProjects }
+
+    /// Employees may manage tasks only when the organization allows it.
+    var canCreateTasks: Bool {
+        if canCreateProjects { return true }
+        return organizationDetail?.employeesCanManageTasks ?? false
+    }
 
     /// Display name for an aggregation key that groups by user.
     func memberName(forUserId userId: String?) -> String {

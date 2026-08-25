@@ -79,6 +79,24 @@ struct SettingsView: View {
                     }
                 }
 
+                Section {
+                    HStack {
+                        Label("Your rate", systemImage: "dollarsign.circle")
+                        Spacer()
+                        TextField("0", value: $state.localHourlyRate, format: .number)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(maxWidth: 90)
+                        Text("\(state.currency)/h").foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("Billable rate")
+                } footer: {
+                    Text(state.hasLocalRate
+                         ? "Used only when your server doesn't share billable rates. Amounts are a local estimate from your billable time and never leave the device."
+                         : "Set an hourly rate to estimate earnings locally when your server doesn't share billable rates.")
+                }
+
                 // Makes it visible when a self-hosted server is too old for the team
                 // features, instead of them silently not appearing.
                 Section("Server features") {
