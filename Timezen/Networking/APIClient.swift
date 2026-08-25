@@ -221,12 +221,21 @@ struct APIClient {
 
     // MARK: Create project / task / tag
 
-    private struct ProjectPayload: Encodable { let name: String; let color: String; let is_billable: Bool }
+    private struct ProjectPayload: Encodable {
+        let name: String
+        let color: String
+        let is_billable: Bool
+        /// Public projects are visible to every member of the organization; private ones
+        /// only to admins and the members assigned to them. The API defaults to private.
+        let is_public: Bool
+    }
     private struct TaskPayload: Encodable { let name: String; let project_id: String }
     private struct TagPayload: Encodable { let name: String }
 
-    func createProject(organizationId: String, name: String, color: String, isBillable: Bool) async throws -> Project {
-        let body = try JSONEncoder().encode(ProjectPayload(name: name, color: color, is_billable: isBillable))
+    func createProject(organizationId: String, name: String, color: String,
+                       isBillable: Bool, isPublic: Bool) async throws -> Project {
+        let body = try JSONEncoder().encode(ProjectPayload(name: name, color: color,
+                                                           is_billable: isBillable, is_public: isPublic))
         let data = try await send(try request("POST", "/organizations/\(organizationId)/projects", body: body))
         return try decode(DataEnvelope<Project>.self, from: data).data
     }

@@ -27,7 +27,15 @@ struct SettingsView: View {
                                 Task { await state.switchOrganization(to: membership) }
                             } label: {
                                 HStack {
-                                    Text(membership.organizationName).foregroundStyle(.primary)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(membership.organizationName).foregroundStyle(.primary)
+                                        // The role decides what the dashboard can show:
+                                        // team reports and billable rates need more than "employee".
+                                        if let role = membership.role {
+                                            Text(role.capitalized)
+                                                .font(.caption2).foregroundStyle(.secondary)
+                                        }
+                                    }
                                     Spacer()
                                     if membership.id == state.selectedMembership?.id {
                                         Image(systemName: "checkmark").foregroundStyle(.tint)
@@ -39,6 +47,9 @@ struct SettingsView: View {
                 } else if let org = state.selectedMembership {
                     Section("Organization") {
                         LabeledContent("Current", value: org.organizationName)
+                        if let role = org.role {
+                            LabeledContent("Your role", value: role.capitalized)
+                        }
                     }
                 }
 
@@ -64,6 +75,22 @@ struct SettingsView: View {
                             ForEach([4, 6, 8, 10, 12], id: \.self) { Text("\($0) hours").tag($0) }
                         } label: {
                             Label("Remind after", systemImage: "clock")
+                        }
+                    }
+                }
+
+                // Makes it visible when a self-hosted server is too old for the team
+                // features, instead of them silently not appearing.
+                Section("Server features") {
+                    LabeledContent("Team members", value: state.membersStatus.label)
+                    LabeledContent("Reports", value: state.reportStatus.label)
+                }
+                .font(.footnote)
+
+                Section {
+                    if let url = ReviewPrompt.writeReviewURL {
+                        Link(destination: url) {
+                            Label("Rate Timezen", systemImage: "star")
                         }
                     }
                 }

@@ -107,8 +107,9 @@ struct ProjectPickerView: View {
                 }
             }
             .sheet(isPresented: $showNewProject) {
-                CreateProjectSheet { name, color, billable in
-                    if let p = await state.createProject(name: name, color: color, isBillable: billable) {
+                CreateProjectSheet { name, color, billable, isPublic in
+                    if let p = await state.createProject(name: name, color: color,
+                                                         isBillable: billable, isPublic: isPublic) {
                         selectedProjectId = p.id
                         selectedTaskId = nil
                     }
@@ -131,11 +132,12 @@ struct ProjectPickerView: View {
 struct CreateProjectSheet: View {
     @EnvironmentObject var state: AppState
     @Environment(\.dismiss) private var dismiss
-    let onCreate: (String, String, Bool) async -> Void
+    let onCreate: (String, String, Bool, Bool) async -> Void
 
     @State private var name = ""
     @State private var color = "#3B82F6"
     @State private var billable = false
+    @State private var isPublic = false
     @State private var busy = false
 
     private let palette = ["#3B82F6", "#8B5CF6", "#F59E0B", "#10B981", "#EF4444",
@@ -162,6 +164,11 @@ struct CreateProjectSheet: View {
                 }
                 Section {
                     Toggle(isOn: $billable) { Label("Billable", systemImage: "dollarsign.circle") }
+                    Toggle(isOn: $isPublic) { Label("Public", systemImage: "person.3") }
+                } footer: {
+                    Text(isPublic
+                         ? "Everyone in the organization can see and track time on this project."
+                         : "Only admins and members assigned to the project can see it.")
                 }
             }
             .navigationTitle("New Project")
@@ -171,7 +178,7 @@ struct CreateProjectSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Create") {
                         busy = true
-                        Task { await onCreate(name, color, billable); dismiss() }
+                        Task { await onCreate(name, color, billable, isPublic); dismiss() }
                     }
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || busy)
                 }

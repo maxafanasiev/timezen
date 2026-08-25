@@ -55,6 +55,39 @@ final class AppState: ObservableObject {
     /// Whether the member listing has been attempted for the current organization, so a
     /// 403 for employees isn't retried on every dashboard visit.
     @Published var membersProbed: Bool = false
+    /// Why the team views are (un)available — surfaced in Settings, because otherwise a
+    /// server that doesn't support them just looks like "nothing changed".
+    @Published var membersStatus: EndpointStatus = .unknown
+    @Published var reportStatus: EndpointStatus = .unknown
+
+    /// Outcome of probing an endpoint this build depends on.
+    enum EndpointStatus: Equatable {
+        case unknown
+        case ok
+        case forbidden          // 403 — the role isn't allowed
+        case missing            // 404 — this server doesn't have the endpoint
+        case failed(String)
+
+        var label: String {
+            switch self {
+            case .unknown: return "not checked"
+            case .ok: return "available"
+            case .forbidden: return "no permission (403)"
+            case .missing: return "not supported by server (404)"
+            case .failed(let message): return message
+            }
+        }
+    }
+
+    private static func status(for error: Error) -> EndpointStatus {
+        switch error {
+        case APIError.forbidden: return .forbidden
+        case APIError.http(404, _): return .missing
+        case let APIError.http(code, message): return .failed(message ?? "HTTP \(code)")
+        case let apiError as APIError: return .failed(apiError.errorDescription ?? "failed")
+        default: return .failed(error.localizedDescription)
+        }
+    }
 
     // Offline demo / App Review mode (no network; mutations are local).
     @Published var isDemo: Bool = false
@@ -68,6 +101,9 @@ final class AppState: ObservableObject {
     @Published var draftBillable: Bool = false
 
     // UI
+    /// Bumped when a finished timer makes this a good moment to ask for a rating; the
+    /// view layer owns the actual StoreKit call.
+    @Published var reviewRequestToken: Int = 0
     @Published var isBusy: Bool = false          // login / full session load
     @Published var isTimerBusy: Bool = false     // start/stop action in flight
     @Published var errorMessage: String?
@@ -355,6 +391,7 @@ final class AppState: ObservableObject {
         projects = []; tasks = []; tags = []; clients = []
         activeEntry = nil; recentEntries = []; dashboardEntries = []
         members = []; report = nil; reportRestricted = false; membersProbed = false
+        membersStatus = .unknown; reportStatus = .unknown
         entriesLoaded = false
         isDemo = false
         resetDraft()
@@ -376,6 +413,7 @@ final class AppState: ObservableObject {
         storedOrgId = membership.organizationId
         projects = []; tasks = []; tags = []; clients = []
         members = []; report = nil; reportRestricted = false; membersProbed = false
+        membersStatus = .unknown; reportStatus = .unknown
         recentEntries = []; entriesLoaded = false
         resetDraft()
         await loadOrganizationData()
@@ -399,6 +437,9 @@ final class AppState: ObservableObject {
             tasks = try await t
             tags = try await g
             clients = try await c
+            // Probe the team endpoints once per organization so Settings can report
+            // whether this server supports them, even before the dashboard is opened.
+            if !membersProbed { await loadMembers() }
         } catch {
             if !silent {
                 errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
@@ -476,7 +517,7 @@ final class AppState: ObservableObject {
 
     // MARK: - Create project / task / tag (inline)
 
-    func createProject(name: String, color: String, isBillable: Bool) async -> Project? {
+    func createProject(name: String, color: String, isBillable: Bool, isPublic: Bool) async -> Project? {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         if isDemo {
@@ -487,7 +528,8 @@ final class AppState: ObservableObject {
         }
         guard let client, let orgId = organizationId else { return nil }
         do {
-            let p = try await client.createProject(organizationId: orgId, name: trimmed, color: color, isBillable: isBillable)
+            let p = try await client.createProject(organizationId: orgId, name: trimmed, color: color,
+                                                   isBillable: isBillable, isPublic: isPublic)
             projects.append(p); return p
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
@@ -583,6 +625,7 @@ final class AppState: ObservableObject {
             activeEntry = nil
             resetDraft()
             await refreshEntries()
+            if ReviewPrompt.registerCompletedTimer() { reviewRequestToken += 1 }
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
@@ -844,10 +887,12 @@ final class AppState: ObservableObject {
         defer { membersProbed = true }
         do {
             members = try await client.members(organizationId: orgId)
+            membersStatus = .ok
         } catch APIError.unauthorized {
             signOut()
         } catch {
             members = []
+            membersStatus = Self.status(for: error)
         }
     }
 
@@ -870,13 +915,16 @@ final class AppState: ObservableObject {
         do {
             report = OrgReport(byDay: try await byDay, byMember: try await byMember)
             reportRestricted = false
+            reportStatus = .ok
         } catch APIError.unauthorized {
             signOut()
         } catch APIError.forbidden {
             report = nil
             reportRestricted = true
+            reportStatus = .forbidden
         } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            report = nil
+            reportStatus = Self.status(for: error)
         }
     }
 
@@ -971,6 +1019,8 @@ final class AppState: ObservableObject {
                    role: "employee", isPlaceholder: false, billableRate: 5000),
         ]
         membersProbed = true
+        membersStatus = .ok
+        reportStatus = .ok
 
         func mk(_ id: String, _ desc: String, _ pid: String?, _ tid: String?, _ tags: [String],
                 _ billable: Bool, day: Int, h: Int, m: Int, minutes: Int) -> TimeEntry {

@@ -1,9 +1,11 @@
 import SwiftUI
+import StoreKit
 
 /// Clockify-style home: a running-timer bar pinned at the top with the day-grouped
 /// history list below it. Tapping any entry (running or past) opens the edit sheet.
 struct HomeView: View {
     @EnvironmentObject var state: AppState
+    @Environment(\.requestReview) private var requestReview
 
     @State private var editingEntry: TimeEntry?
     @State private var showProjectPicker = false
@@ -32,6 +34,14 @@ struct HomeView: View {
             }
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic),
                         prompt: "Search description, project, tag")
+            .onChange(of: state.reviewRequestToken) { _, token in
+                guard token > 0 else { return }
+                // Let the list settle after the timer stops before the sheet appears.
+                Task {
+                    try? await Task.sleep(for: .seconds(1.5))
+                    requestReview()
+                }
+            }
             .sheet(isPresented: $showNewEntry) {
                 EntryEditView()
             }
