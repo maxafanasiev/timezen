@@ -14,6 +14,8 @@ struct TimezenApp: App {
                 .preferredColorScheme(state.appearance.colorScheme)
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .background { state.lockNow() }
+                    // Coming back: pick up projects/entries changed elsewhere (web UI, other device).
+                    if phase == .active { Task { await state.refreshOnForeground() } }
                 }
         }
     }

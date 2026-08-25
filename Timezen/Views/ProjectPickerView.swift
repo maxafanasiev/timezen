@@ -92,6 +92,8 @@ struct ProjectPickerView: View {
                     }
                 }
             }
+            .refreshable { await state.refreshProjectsAndTasks() }
+            .task { await state.refreshProjectsAndTasks() }
             .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always))
             .navigationTitle("Select Project")
             .navigationBarTitleDisplayMode(.inline)

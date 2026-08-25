@@ -20,6 +20,30 @@ enum SolidTimeFormatters {
         api.string(from: date)
     }
 
+    /// The aggregation endpoint groups days as local `yyyy-MM-dd` keys.
+    private static let dayKey: DateFormatter = {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .iso8601)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    static func parseDayKey(_ string: String) -> Date? {
+        dayKey.date(from: string)
+    }
+
+    /// Money coming back from the API is in cents of the organization's currency.
+    static func money(cents: Int, currency: String) -> String {
+        let f = NumberFormatter()
+        f.numberStyle = .currency
+        f.currencyCode = currency
+        f.locale = .autoupdatingCurrent
+        f.maximumFractionDigits = 2
+        let value = NSNumber(value: Double(cents) / 100.0)
+        return f.string(from: value) ?? String(format: "%.2f %@", Double(cents) / 100.0, currency)
+    }
+
     /// "1:23:45" for a running timer / long durations, "12:05" for short ones.
     static func hms(_ seconds: Int) -> String {
         let s = max(0, seconds)

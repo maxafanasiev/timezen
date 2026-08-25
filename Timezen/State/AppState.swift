@@ -35,11 +35,26 @@ final class AppState: ObservableObject {
     @Published var activeEntry: TimeEntry?
     @Published var recentEntries: [TimeEntry] = []
     @Published var entriesRestricted: Bool = false   // history hidden (no permission in this org)
+    /// True until the first entry fetch for the current session/organization finishes, so
+    /// the history can show a loading placeholder instead of an "empty" state.
+    @Published var entriesLoaded: Bool = false
     @Published var now: Date = Date()
 
     // Dashboard
     @Published var dashboardEntries: [TimeEntry] = []
     @Published var dashboardLoading: Bool = false
+
+    // Organization-wide reporting (admins / managers)
+    /// Members of the current organization; empty when the API denies the listing,
+    /// which is also what gates the team views in the dashboard.
+    @Published var members: [Member] = []
+    @Published var report: OrgReport?
+    @Published var reportLoading: Bool = false
+    /// Set when the server refuses an organization-wide report (employee role).
+    @Published var reportRestricted: Bool = false
+    /// Whether the member listing has been attempted for the current organization, so a
+    /// 403 for employees isn't retried on every dashboard visit.
+    @Published var membersProbed: Bool = false
 
     // Offline demo / App Review mode (no network; mutations are local).
     @Published var isDemo: Bool = false
@@ -179,29 +194,31 @@ final class AppState: ObservableObject {
         shared.set(token, forKey: "token")
         shared.set(organizationId ?? "", forKey: "orgId")
         shared.set(selectedMembership?.id ?? "", forKey: "memberId")
-        shared.set(widgetTodaySeconds(), forKey: "todaySeconds")
+        // Publish only completed time + the running start: the widget counts the live
+        // part itself, and a snapshot from an earlier day reads as 0 instead of stale.
+        shared.set(widgetTodayBaseSeconds(), forKey: TimezenSharedKey.todayBaseSeconds)
+        shared.set(Calendar.current.startOfDay(for: Date()).timeIntervalSince1970,
+                   forKey: TimezenSharedKey.todayDay)
         if let active = activeEntry, let start = active.startDate {
-            shared.set(start.timeIntervalSince1970, forKey: "runningStart")
+            shared.set(start.timeIntervalSince1970, forKey: TimezenSharedKey.runningStart)
             shared.set(active.description ?? "", forKey: "runningTitle")
             let p = project(for: active.projectId)
             shared.set(p?.name ?? "No project", forKey: "runningProject")
             shared.set(p?.color ?? "#888888", forKey: "runningColor")
         } else {
-            shared.set(-1.0, forKey: "runningStart")
+            shared.set(-1.0, forKey: TimezenSharedKey.runningStart)
         }
         WidgetCenter.shared.reloadAllTimelines()
     }
 
-    private func widgetTodaySeconds() -> Int {
+    /// Completed time tracked today; the running timer is published separately as its
+    /// start date so the widget can keep counting without the app.
+    private func widgetTodayBaseSeconds() -> Int {
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
-        var total = recentEntries
+        return recentEntries
             .filter { !$0.isRunning && cal.isDate($0.startDate ?? .distantPast, inSameDayAs: today) }
             .reduce(0) { $0 + ($1.duration ?? 0) }
-        if let active = activeEntry, let start = active.startDate, cal.isDate(start, inSameDayAs: today) {
-            total += activeElapsedSeconds
-        }
-        return total
     }
 
     private var ticker: AnyCancellable?
@@ -337,6 +354,8 @@ final class AppState: ObservableObject {
         selectedMembership = nil
         projects = []; tasks = []; tags = []; clients = []
         activeEntry = nil; recentEntries = []; dashboardEntries = []
+        members = []; report = nil; reportRestricted = false; membersProbed = false
+        entriesLoaded = false
         isDemo = false
         resetDraft()
         ticker = nil
@@ -356,6 +375,8 @@ final class AppState: ObservableObject {
         selectedMembership = membership
         storedOrgId = membership.organizationId
         projects = []; tasks = []; tags = []; clients = []
+        members = []; report = nil; reportRestricted = false; membersProbed = false
+        recentEntries = []; entriesLoaded = false
         resetDraft()
         await loadOrganizationData()
         await refreshEntries()
@@ -363,7 +384,11 @@ final class AppState: ObservableObject {
 
     // MARK: - Data loading
 
-    func loadOrganizationData() async {
+    /// Fetch reference data for the selected organization.
+    /// `silent` is used for background refreshes (foreground return, pull-to-refresh),
+    /// where a transient network error shouldn't pop an alert over the current screen.
+    func loadOrganizationData(silent: Bool = false) async {
+        if isDemo { return }   // demo data is local; nothing to fetch
         guard let client, let orgId = organizationId else { return }
         async let p = client.projects(organizationId: orgId)
         async let t = client.tasks(organizationId: orgId)
@@ -375,12 +400,42 @@ final class AppState: ObservableObject {
             tags = try await g
             clients = try await c
         } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            if !silent {
+                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            }
         }
     }
 
+    /// Lightweight refresh of just projects + tasks — used when opening the project
+    /// picker so projects created elsewhere (web UI, another device) appear right away.
+    func refreshProjectsAndTasks() async {
+        if isDemo { return }
+        guard let client, let orgId = organizationId else { return }
+        async let p = client.projects(organizationId: orgId)
+        async let t = client.tasks(organizationId: orgId)
+        do {
+            projects = try await p
+            tasks = try await t
+        } catch {
+            // Silent: the picker keeps showing the previously loaded list.
+        }
+    }
+
+    /// Everything the timer screen shows: entries plus reference data.
+    func refreshAll() async {
+        await loadOrganizationData(silent: true)
+        await refreshEntries()
+    }
+
+    /// Called when the app comes back to the foreground.
+    func refreshOnForeground() async {
+        guard phase == .ready, !isDemo else { return }
+        await refreshAll()
+    }
+
     func refreshEntries() async {
-        if isDemo { return }   // demo data is local; nothing to fetch
+        if isDemo { entriesLoaded = true; return }   // demo data is local; nothing to fetch
+        defer { entriesLoaded = true }               // even a failed fetch ends the loading state
         guard let client, let orgId = organizationId else { return }
 
         // Running timer is user-scoped and always allowed.
@@ -717,7 +772,14 @@ final class AppState: ObservableObject {
 
     /// Fetch the member's own entries within [from, to] for dashboard statistics.
     func loadDashboard(from: Date, to: Date) async {
-        if isDemo { dashboardEntries = recentEntries; return }   // local demo data
+        if isDemo {
+            // Local demo data still has to honour the selected range.
+            dashboardEntries = recentEntries.filter { entry in
+                guard let start = entry.startDate else { return false }
+                return start >= from && start <= to
+            }
+            return
+        }
         guard let client, let orgId = organizationId, let memberId = selectedMembership?.id else { return }
         dashboardLoading = true
         defer { dashboardLoading = false }
@@ -740,7 +802,9 @@ final class AppState: ObservableObject {
         let cal = Calendar.current
         var rows: [(TimeEntry, Int, Date)] = []
         for e in dashboardEntries where !e.isRunning {
-            guard let s = e.startDate else { continue }
+            // The API already filters by range; demo data (and stale results after a
+            // range change) still has to be clamped here.
+            guard let s = e.startDate, s >= from, s <= to else { continue }
             rows.append((e, e.duration ?? 0, cal.startOfDay(for: s)))
         }
         // Include the running entry's live elapsed time if it started within the range.
@@ -748,6 +812,114 @@ final class AppState: ObservableObject {
             rows.append((a, activeElapsedSeconds, cal.startOfDay(for: s)))
         }
         return rows.map { (entry: $0.0, seconds: $0.1, day: $0.2) }
+    }
+
+    // MARK: - Organization-wide reporting
+
+    /// Currency of the selected organization (ISO 4217), used to format money.
+    var currency: String { selectedMembership?.organization.currency ?? "USD" }
+
+    /// Display name for an aggregation key that groups by user.
+    func memberName(forUserId userId: String?) -> String {
+        guard let userId else { return "Unknown" }
+        if let member = members.first(where: { $0.userId == userId }) { return member.name }
+        if user?.id == userId { return user?.name ?? "You" }
+        return "Unknown member"
+    }
+
+    func member(forUserId userId: String?) -> Member? {
+        guard let userId else { return nil }
+        return members.first { $0.userId == userId }
+    }
+
+    /// Whether the signed-in member may look at organization-wide data. The member list
+    /// is the cheapest probe for that: the API 403s for employees.
+    var canViewTeam: Bool { !members.isEmpty }
+
+    /// Load the organization's members. Silent on failure — a 403 simply means this
+    /// account is an employee and the team views stay hidden.
+    func loadMembers() async {
+        if isDemo { return }   // demo members are seeded with the rest of the demo data
+        guard let client, let orgId = organizationId else { return }
+        defer { membersProbed = true }
+        do {
+            members = try await client.members(organizationId: orgId)
+        } catch APIError.unauthorized {
+            signOut()
+        } catch {
+            members = []
+        }
+    }
+
+    /// Fetch a report for the given range. `memberId == nil` reports on the whole
+    /// organization, which requires admin/manager permissions.
+    func loadReport(from: Date, to: Date, memberId: String?, projectIds: [String] = []) async {
+        if isDemo {
+            report = demoReport(from: from, to: to, memberId: memberId, projectIds: projectIds)
+            return
+        }
+        guard let client, let orgId = organizationId else { return }
+        reportLoading = true
+        defer { reportLoading = false }
+        async let byDay = client.aggregate(organizationId: orgId, group: "day", subGroup: "project",
+                                           memberId: memberId, projectIds: projectIds,
+                                           from: from, to: to, fillGaps: true)
+        async let byMember = client.aggregate(organizationId: orgId, group: "user",
+                                              memberId: memberId, projectIds: projectIds,
+                                              from: from, to: to)
+        do {
+            report = OrgReport(byDay: try await byDay, byMember: try await byMember)
+            reportRestricted = false
+        } catch APIError.unauthorized {
+            signOut()
+        } catch APIError.forbidden {
+            report = nil
+            reportRestricted = true
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    /// Offline equivalent of `loadReport` for the demo/App Review account.
+    private func demoReport(from: Date, to: Date, memberId: String?, projectIds: [String]) -> OrgReport {
+        let cal = Calendar.current
+        var rows = dashboardRows(from: from, to: to)
+        if !projectIds.isEmpty {
+            // "none" is the API's stand-in for entries without a project.
+            rows = rows.filter { projectIds.contains($0.entry.projectId ?? "none") }
+        }
+        // Demo rates in cents per hour, keyed by demo member.
+        let rate = 7500
+        var byDay: [Date: [String: Int]] = [:]
+        for row in rows {
+            byDay[row.day, default: [:]][row.entry.projectId ?? "__none__", default: 0] += row.seconds
+        }
+        func cost(_ seconds: Int) -> Int { Int((Double(seconds) / 3600.0) * Double(rate)) }
+        let days = byDay
+            .map { day, byProject in
+                OrgReport.Day(day: day, projects: byProject
+                    .map { OrgReport.Slice(key: $0.key == "__none__" ? nil : $0.key, seconds: $0.value, cost: cost($0.value)) }
+                    .sorted { ($0.seconds, $1.id) > ($1.seconds, $0.id) })
+            }
+            .sorted { $0.day < $1.day }
+        var projectTotals: [String: Int] = [:]
+        for day in days { for slice in day.projects { projectTotals[slice.id, default: 0] += slice.seconds } }
+        let projects = projectTotals
+            .map { OrgReport.Slice(key: $0.key == "__none__" ? nil : $0.key, seconds: $0.value, cost: cost($0.value)) }
+            .sorted { ($0.seconds, $1.id) > ($1.seconds, $0.id) }
+        let total = rows.reduce(0) { $0 + $1.seconds }
+        // Split the demo total across the demo members so the team view has something to show.
+        let visible = memberId == nil ? members : members.filter { $0.id == memberId }
+        var remaining = total
+        var memberSlices: [OrgReport.Slice] = []
+        for (index, member) in visible.enumerated() {
+            let share = index == visible.count - 1 ? remaining : total / max(1, visible.count)
+            remaining -= share
+            memberSlices.append(OrgReport.Slice(key: member.userId, seconds: share, cost: cost(share)))
+        }
+        _ = cal
+        return OrgReport(totalSeconds: total, totalCost: cost(total), days: days,
+                         projects: projects, members: memberSlices.sorted { $0.seconds > $1.seconds })
     }
 
     private func startTicker() {
@@ -761,6 +933,7 @@ final class AppState: ObservableObject {
 
     func loadDemoData() {
         isDemo = true
+        entriesLoaded = true
         demoCounter = 0
         let now = Date()
         let cal = Calendar.current
@@ -788,6 +961,16 @@ final class AppState: ObservableObject {
         ]
         tags = [Tag(id: "g1", name: "focus"), Tag(id: "g2", name: "meeting"), Tag(id: "g3", name: "review")]
         clients = []
+        // Team roster for the admin views (rates in cents per hour).
+        members = [
+            Member(id: "m1", userId: "u1", name: "Alex Rivera", email: "alex@acme.studio",
+                   role: "owner", isPlaceholder: false, billableRate: 7500),
+            Member(id: "m2", userId: "u2", name: "Jamie Chen", email: "jamie@acme.studio",
+                   role: "admin", isPlaceholder: false, billableRate: 6500),
+            Member(id: "m3", userId: "u3", name: "Sam Okafor", email: "sam@acme.studio",
+                   role: "employee", isPlaceholder: false, billableRate: 5000),
+        ]
+        membersProbed = true
 
         func mk(_ id: String, _ desc: String, _ pid: String?, _ tid: String?, _ tags: [String],
                 _ billable: Bool, day: Int, h: Int, m: Int, minutes: Int) -> TimeEntry {

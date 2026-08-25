@@ -32,3 +32,7 @@ fastlane/README.md
 
 # JetBrains
 .idea/
+
+# Local build artifacts
+*.ipa
+*.dSYM.zip

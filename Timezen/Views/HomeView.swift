@@ -126,7 +126,7 @@ struct HomeView: View {
             ZStack {
                 Circle().fill(isRunning ? Color.red : Color.accentColor)
                     .frame(width: 48, height: 48)
-                if state.isTimerBusy {
+                if state.isTimerBusy || !state.entriesLoaded {
                     ProgressView().tint(.white)
                 } else {
                     Image(systemName: isRunning ? "stop.fill" : "play.fill")
@@ -135,7 +135,8 @@ struct HomeView: View {
                 }
             }
         }
-        .disabled(state.isTimerBusy)
+        // Until the first fetch lands we don't know whether a timer is already running.
+        .disabled(state.isTimerBusy || !state.entriesLoaded)
     }
 
     // MARK: - History list
@@ -175,7 +176,10 @@ struct HomeView: View {
 
     @ViewBuilder private var historyList: some View {
         if groups.isEmpty {
-            if !searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+            // Don't claim "no entries" before the first fetch has come back.
+            if !state.entriesLoaded {
+                HistorySkeletonView()
+            } else if !searchText.trimmingCharacters(in: .whitespaces).isEmpty {
                 EmptyStateView(icon: "magnifyingglass", title: "No matches",
                                message: "No entries match “\(searchText)”.")
             } else if state.entriesRestricted {
@@ -228,7 +232,7 @@ struct HomeView: View {
                 }
             }
             .listStyle(.plain)
-            .refreshable { await state.refreshEntries() }
+            .refreshable { await state.refreshAll() }
         }
     }
 

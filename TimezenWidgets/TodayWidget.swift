@@ -3,17 +3,26 @@ import SwiftUI
 
 struct TodayEntry: TimelineEntry {
     var date: Date
-    var todaySeconds: Int
+    /// Completed time tracked today (the running timer is counted live from `liveOrigin`).
+    var baseSeconds: Int
+    /// Date the "today" counter would have started from — non-nil while a timer runs.
+    var liveOrigin: Date?
     var runningStart: Date?
     var runningTitle: String
     var runningProject: String
     var runningColorHex: String
+
+    /// Today's total at render time (used for the static, non-running case).
+    var totalSeconds: Int { baseSeconds }
 }
 
 struct TodayProvider: TimelineProvider {
     func placeholder(in context: Context) -> TodayEntry {
-        TodayEntry(date: Date(), todaySeconds: 4 * 3600 + 35 * 60, runningStart: Date().addingTimeInterval(-1500),
-                   runningTitle: "Prototype polish", runningProject: "Mobile App", runningColorHex: "#8B5CF6")
+        let start = Date().addingTimeInterval(-1500)
+        return TodayEntry(date: Date(), baseSeconds: 4 * 3600 + 35 * 60,
+                          liveOrigin: start.addingTimeInterval(-(4 * 3600 + 35 * 60)),
+                          runningStart: start, runningTitle: "Prototype polish",
+                          runningProject: "Mobile App", runningColorHex: "#8B5CF6")
     }
 
     func getSnapshot(in context: Context, completion: @escaping (TodayEntry) -> Void) {
@@ -21,19 +30,23 @@ struct TodayProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<TodayEntry>) -> Void) {
-        let entry = load()
-        // Refresh a minute at a time so the "today" total stays fresh.
-        completion(Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(60))))
+        let now = Date()
+        let entry = load(now: now)
+        // While a timer runs the total is rendered live, so the only reload that really
+        // matters is midnight, when "today" resets. Refresh periodically as a backstop.
+        let midnight = Calendar.current.startOfDay(for: now.addingTimeInterval(24 * 3600))
+        let next = min(midnight, now.addingTimeInterval(15 * 60))
+        completion(Timeline(entries: [entry], policy: .after(next)))
     }
 
-    private func load() -> TodayEntry {
+    private func load(now: Date = Date()) -> TodayEntry {
         let ud = UserDefaults(suiteName: timezenAppGroup)
-        let startTS = ud?.double(forKey: "runningStart") ?? -1
-        let start = startTS > 0 ? Date(timeIntervalSince1970: startTS) : nil
+        let snapshot = TimezenTodaySnapshot.load(now: now, from: ud)
         return TodayEntry(
-            date: Date(),
-            todaySeconds: ud?.integer(forKey: "todaySeconds") ?? 0,
-            runningStart: start,
+            date: now,
+            baseSeconds: snapshot.seconds(at: now),
+            liveOrigin: snapshot.liveOrigin,
+            runningStart: snapshot.runningStart,
             runningTitle: ud?.string(forKey: "runningTitle") ?? "",
             runningProject: ud?.string(forKey: "runningProject") ?? "",
             runningColorHex: ud?.string(forKey: "runningColor") ?? "#888888")
@@ -51,11 +64,18 @@ struct TodayWidgetView: View {
                 Image(systemName: "timer").foregroundStyle(.tint)
                 Text("Today").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             }
-            Text(timezenDurationHMS(entry.todaySeconds))
-                .font(.system(.title2, design: .rounded).weight(.semibold))
-                .monospacedDigit()
-                .minimumScaleFactor(0.6)
-                .lineLimit(1)
+            Group {
+                if let origin = entry.liveOrigin {
+                    // Counts up on its own, so the total stays live between timeline reloads.
+                    Text(timerInterval: origin...Date.distantFuture, countsDown: false)
+                } else {
+                    Text(timezenDurationHMS(entry.totalSeconds))
+                }
+            }
+            .font(.system(.title2, design: .rounded).weight(.semibold))
+            .monospacedDigit()
+            .minimumScaleFactor(0.6)
+            .lineLimit(1)
 
             if let start = entry.runningStart {
                 HStack(spacing: 6) {

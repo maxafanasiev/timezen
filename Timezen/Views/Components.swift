@@ -56,6 +56,47 @@ struct ActivityView: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
+/// Placeholder rows shown while the history is being fetched, so the first launch
+/// doesn't read as "you have no time entries".
+struct HistorySkeletonView: View {
+    var rows: Int = 5
+    @State private var dim = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            bar(width: 90, height: 12)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+            ForEach(0..<rows, id: \.self) { index in
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        bar(width: index.isMultiple(of: 2) ? 200 : 150, height: 14)
+                        bar(width: 110, height: 11)
+                    }
+                    Spacer(minLength: 8)
+                    bar(width: 62, height: 14)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                Divider().padding(.leading, 16)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .opacity(dim ? 0.45 : 1)
+        .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: dim)
+        .onAppear { dim = true }
+        .accessibilityElement()
+        .accessibilityLabel("Loading time entries")
+    }
+
+    private func bar(width: CGFloat, height: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: height / 2)
+            .fill(Color.secondary.opacity(0.18))
+            .frame(width: width, height: height)
+    }
+}
+
 /// Empty-state placeholder.
 struct EmptyStateView: View {
     let icon: String

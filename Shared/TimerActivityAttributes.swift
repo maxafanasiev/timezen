@@ -15,6 +15,73 @@ let timezenAPIDateFormatter: DateFormatter = {
     return f
 }()
 
+/// Keys the app publishes to the App Group so the widget and intents can render
+/// "today" without the app running.
+enum TimezenSharedKey {
+    static let todayBaseSeconds = "todayBaseSeconds"   // completed entries that started today
+    static let todayDay = "todayDay"                   // start of the day the base refers to
+    static let runningStart = "runningStart"           // running timer start, -1 when idle
+}
+
+/// Today's tracked time, reconstructed from the shared snapshot.
+///
+/// The app publishes only the *completed* total plus the running timer's start, so the
+/// widget can keep counting on its own and a stale snapshot from yesterday reads as 0
+/// instead of silently showing yesterday's number.
+struct TimezenTodaySnapshot {
+    /// Completed seconds tracked on `day`.
+    var baseSeconds: Int
+    /// Start of the day `baseSeconds` belongs to.
+    var day: Date
+    /// Start of the running timer, if one is running.
+    var runningStart: Date?
+
+    static func load(now: Date = Date(),
+                     from ud: UserDefaults? = UserDefaults(suiteName: timezenAppGroup)) -> TimezenTodaySnapshot {
+        let today = Calendar.current.startOfDay(for: now)
+        let dayTS = ud?.double(forKey: TimezenSharedKey.todayDay) ?? 0
+        let day = dayTS > 0 ? Date(timeIntervalSince1970: dayTS) : today
+        let startTS = ud?.double(forKey: TimezenSharedKey.runningStart) ?? -1
+        // A base written on an earlier day no longer describes today.
+        let base = Calendar.current.isDate(day, inSameDayAs: today)
+            ? (ud?.integer(forKey: TimezenSharedKey.todayBaseSeconds) ?? 0) : 0
+        return TimezenTodaySnapshot(baseSeconds: max(0, base), day: today,
+                                    runningStart: startTS > 0 ? Date(timeIntervalSince1970: startTS) : nil)
+    }
+
+    /// The running timer, but only when it started today — matching how the app counts
+    /// "today's total" (a timer started yesterday isn't folded into today).
+    var runningStartedToday: Date? {
+        guard let runningStart, runningStart >= day else { return nil }
+        return runningStart
+    }
+
+    /// Date from which `Text(timerInterval:)` counts up to today's total — i.e. the
+    /// moment the total would have been zero. `nil` when nothing is running today.
+    var liveOrigin: Date? {
+        runningStartedToday.map { $0.addingTimeInterval(-Double(baseSeconds)) }
+    }
+
+    /// Today's total at `now` (base plus the running timer's elapsed time).
+    func seconds(at now: Date = Date()) -> Int {
+        guard let start = runningStartedToday else { return baseSeconds }
+        return baseSeconds + max(0, Int(now.timeIntervalSince(start)))
+    }
+
+    /// Fold a just-finished entry into the shared base so the widget total doesn't dip
+    /// until the app next publishes a snapshot.
+    static func addCompleted(seconds: Int, startedAt: Date, now: Date = Date(),
+                             to ud: UserDefaults? = UserDefaults(suiteName: timezenAppGroup)) {
+        guard let ud, seconds > 0 else { return }
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: now)
+        guard cal.isDate(startedAt, inSameDayAs: today) else { return }
+        let current = load(now: now, from: ud)
+        ud.set(current.baseSeconds + seconds, forKey: TimezenSharedKey.todayBaseSeconds)
+        ud.set(today.timeIntervalSince1970, forKey: TimezenSharedKey.todayDay)
+    }
+}
+
 /// Interactive widget button: start the timer if none is running, otherwise stop it.
 /// Runs from the widget using credentials the app publishes to the App Group.
 struct ToggleTimerIntent: AppIntent {
@@ -58,13 +125,19 @@ enum TimezenWidgetTimer {
                                        "billable": e["billable"] as? Bool ?? false]
             if let p = e["project_id"] as? String { body["project_id"] = p }
             _ = await send("PUT", "/organizations/\(org)/time-entries/\(id)", body)
-            ud?.set(-1.0, forKey: "runningStart")
+            // Keep today's total intact until the app publishes a fresh snapshot.
+            if let startString = e["start"] as? String,
+               let started = timezenAPIDateFormatter.date(from: startString) {
+                TimezenTodaySnapshot.addCompleted(seconds: Int(Date().timeIntervalSince(started)),
+                                                 startedAt: started, to: ud)
+            }
+            ud?.set(-1.0, forKey: TimezenSharedKey.runningStart)
         } else {
             guard let org = ud?.string(forKey: "orgId"), !org.isEmpty,
                   let member = ud?.string(forKey: "memberId"), !member.isEmpty else { return }
             _ = await send("POST", "/organizations/\(org)/time-entries",
                            ["member_id": member, "start": now, "end": NSNull(), "billable": false])
-            ud?.set(Date().timeIntervalSince1970, forKey: "runningStart")
+            ud?.set(Date().timeIntervalSince1970, forKey: TimezenSharedKey.runningStart)
             ud?.set("", forKey: "runningTitle")
             ud?.set("Timer", forKey: "runningProject")
             ud?.set("#5B4BEC", forKey: "runningColor")

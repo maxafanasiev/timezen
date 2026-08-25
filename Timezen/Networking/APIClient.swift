@@ -129,6 +129,38 @@ struct APIClient {
         return try decode(CollectionEnvelope<TimeEntry>.self, from: data).data
     }
 
+    /// Organization members. Requires `members:view` — employees get a 403.
+    func members(organizationId: String) async throws -> [Member] {
+        let data = try await send(try request("GET", "/organizations/\(organizationId)/members"))
+        return try decode(CollectionEnvelope<Member>.self, from: data).data
+    }
+
+    /// Server-side aggregation of time entries.
+    ///
+    /// Grouping keys are ids (`project_id`, `user_id`) or `yyyy-MM-dd` days. `cost` comes
+    /// back in cents, computed from the billable rate stored on each entry, and is null
+    /// when the caller isn't allowed to see rates. Without `memberId` this reports on the
+    /// whole organization and needs `time-entries:view:all` (403 for employees).
+    func aggregate(organizationId: String,
+                   group: String,
+                   subGroup: String? = nil,
+                   memberId: String? = nil,
+                   projectIds: [String] = [],
+                   from: Date? = nil,
+                   to: Date? = nil,
+                   fillGaps: Bool = false) async throws -> TimeAggregate {
+        var query = [URLQueryItem(name: "group", value: group)]
+        if let subGroup { query.append(URLQueryItem(name: "sub_group", value: subGroup)) }
+        if let memberId { query.append(URLQueryItem(name: "member_id", value: memberId)) }
+        // Project ids are OR-combined; the literal "none" selects entries without a project.
+        for id in projectIds { query.append(URLQueryItem(name: "project_ids[]", value: id)) }
+        if let from { query.append(URLQueryItem(name: "start", value: SolidTimeFormatters.string(from: from))) }
+        if let to { query.append(URLQueryItem(name: "end", value: SolidTimeFormatters.string(from: to))) }
+        if fillGaps { query.append(URLQueryItem(name: "fill_gaps_in_time_groups", value: "true")) }
+        let data = try await send(try request("GET", "/organizations/\(organizationId)/time-entries/aggregate", query: query))
+        return try decode(DataEnvelope<TimeAggregate>.self, from: data).data
+    }
+
     func projects(organizationId: String) async throws -> [Project] {
         let data = try await send(try request("GET", "/organizations/\(organizationId)/projects"))
         return try decode(CollectionEnvelope<Project>.self, from: data).data

@@ -92,8 +92,9 @@ struct TodayTotalIntent: AppIntent {
     static var openAppWhenRun = false
 
     func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> {
-        // Fast path: the value the app last published to the shared App Group.
-        let seconds = UserDefaults(suiteName: timezenAppGroup)?.integer(forKey: "todaySeconds") ?? 0
+        // Fast path: the app's shared snapshot, with the running timer counted up to now
+        // (and yesterday's snapshot treated as zero).
+        let seconds = TimezenTodaySnapshot.load().seconds()
         let text = timezenDurationHMS(seconds)
         return .result(value: text, dialog: "You've tracked \(text) today.")
     }
