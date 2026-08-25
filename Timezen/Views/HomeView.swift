@@ -15,9 +15,26 @@ struct HomeView: View {
 
     private var isRunning: Bool { state.activeEntry != nil }
 
+    private var errorAlert: Binding<Bool> {
+        Binding(get: { state.errorMessage != nil },
+                set: { if !$0 { state.errorMessage = nil } })
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                if state.isOffline {
+                    HStack(spacing: 6) {
+                        Image(systemName: "wifi.slash")
+                        Text("Offline — showing the last synced data")
+                        Spacer()
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16).padding(.vertical, 6)
+                    .frame(maxWidth: .infinity)
+                    .background(.thinMaterial)
+                }
                 timerBar
                 Divider()
                 historyList
@@ -34,6 +51,13 @@ struct HomeView: View {
             }
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic),
                         prompt: "Search description, project, tag")
+            // Timer actions used to fail silently: the server's message never reached
+            // the screen (a rejected start, an overlap, a permission error).
+            .alert("Something went wrong", isPresented: errorAlert) {
+                Button("OK", role: .cancel) { state.errorMessage = nil }
+            } message: {
+                Text(state.errorMessage ?? "")
+            }
             .onChange(of: state.reviewRequestToken) { _, token in
                 guard token > 0 else { return }
                 // Let the list settle after the timer stops before the sheet appears.
@@ -170,7 +194,7 @@ struct HomeView: View {
     }
 
     private var groups: [DayGroup] {
-        let cal = Calendar.current
+        let cal = state.calendar
         let completed = state.recentEntries.filter { !$0.isRunning && matchesSearch($0) }
         let byDay = Dictionary(grouping: completed) { entry -> Date in
             cal.startOfDay(for: entry.startDate ?? .distantPast)
@@ -238,6 +262,27 @@ struct HomeView: View {
                         // pinned header while scrolling.
                         .background(.ultraThinMaterial)
                         .listRowInsets(EdgeInsets())
+                    }
+                }
+
+                // Older entries load a page at a time; the API only returns the most
+                // recent ones by default.
+                if state.moreEntriesAvailable && searchText.isEmpty {
+                    Section {
+                        HStack {
+                            Spacer()
+                            if state.loadingMoreEntries {
+                                ProgressView()
+                            } else {
+                                Button("Load earlier entries") {
+                                    Task { await state.loadMoreEntries() }
+                                }
+                                .font(.subheadline)
+                            }
+                            Spacer()
+                        }
+                        .listRowSeparator(.hidden)
+                        .task { await state.loadMoreEntries() }
                     }
                 }
             }

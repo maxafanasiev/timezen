@@ -88,6 +88,45 @@ struct APIClient {
         }
     }
 
+    /// Collection endpoints are paginated (15 per page by default on a stock server), so
+    /// a single request would silently show only the first page of projects, tasks, tags,
+    /// clients or members.
+    private struct PaginatedEnvelope<T: Decodable>: Decodable {
+        let data: [T]
+        let meta: Meta?
+
+        struct Meta: Decodable {
+            let currentPage: Int?
+            let lastPage: Int?
+            let total: Int?
+
+            enum CodingKeys: String, CodingKey {
+                case currentPage = "current_page"
+                case lastPage = "last_page"
+                case total
+            }
+        }
+    }
+
+    /// Walk every page of a collection endpoint.
+    private func allPages<T: Decodable>(_ type: T.Type, _ path: String,
+                                        query: [URLQueryItem] = []) async throws -> [T] {
+        var items: [T] = []
+        var page = 1
+        let pageLimit = 50          // safety bound; 50 pages is far past any sane setup
+        while page <= pageLimit {
+            var pageQuery = query
+            pageQuery.append(URLQueryItem(name: "page", value: String(page)))
+            let data = try await send(try request("GET", path, query: pageQuery))
+            let envelope = try decode(PaginatedEnvelope<T>.self, from: data)
+            items.append(contentsOf: envelope.data)
+            // Stop when the server reports the last page, or when it doesn't paginate.
+            guard let last = envelope.meta?.lastPage, page < last, !envelope.data.isEmpty else { break }
+            page += 1
+        }
+        return items
+    }
+
     // MARK: - Endpoints
 
     func me() async throws -> User {
@@ -119,8 +158,10 @@ struct APIClient {
                      memberId: String? = nil,
                      from: Date? = nil,
                      to: Date? = nil,
-                     limit: Int = 100) async throws -> [TimeEntry] {
+                     limit: Int = 100,
+                     offset: Int = 0) async throws -> [TimeEntry] {
         var query = [URLQueryItem(name: "limit", value: String(min(limit, 500)))]  // API caps limit at 500
+        if offset > 0 { query.append(URLQueryItem(name: "offset", value: String(offset))) }
         if let memberId { query.append(URLQueryItem(name: "member_id", value: memberId)) }
         // Date-range filter uses the `start` (>=) and `end` (<=) query params.
         if let from { query.append(URLQueryItem(name: "start", value: SolidTimeFormatters.string(from: from))) }
@@ -137,8 +178,7 @@ struct APIClient {
 
     /// Organization members. Requires `members:view` — employees get a 403.
     func members(organizationId: String) async throws -> [Member] {
-        let data = try await send(try request("GET", "/organizations/\(organizationId)/members"))
-        return try decode(CollectionEnvelope<Member>.self, from: data).data
+        try await allPages(Member.self, "/organizations/\(organizationId)/members")
     }
 
     /// Server-side aggregation of time entries.
@@ -168,23 +208,19 @@ struct APIClient {
     }
 
     func projects(organizationId: String) async throws -> [Project] {
-        let data = try await send(try request("GET", "/organizations/\(organizationId)/projects"))
-        return try decode(CollectionEnvelope<Project>.self, from: data).data
+        try await allPages(Project.self, "/organizations/\(organizationId)/projects")
     }
 
     func tasks(organizationId: String) async throws -> [ProjectTask] {
-        let data = try await send(try request("GET", "/organizations/\(organizationId)/tasks"))
-        return try decode(CollectionEnvelope<ProjectTask>.self, from: data).data
+        try await allPages(ProjectTask.self, "/organizations/\(organizationId)/tasks")
     }
 
     func tags(organizationId: String) async throws -> [Tag] {
-        let data = try await send(try request("GET", "/organizations/\(organizationId)/tags"))
-        return try decode(CollectionEnvelope<Tag>.self, from: data).data
+        try await allPages(Tag.self, "/organizations/\(organizationId)/tags")
     }
 
     func clients(organizationId: String) async throws -> [Client] {
-        let data = try await send(try request("GET", "/organizations/\(organizationId)/clients"))
-        return try decode(CollectionEnvelope<Client>.self, from: data).data
+        try await allPages(Client.self, "/organizations/\(organizationId)/clients")
     }
 
     // MARK: Mutations

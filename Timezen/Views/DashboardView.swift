@@ -64,7 +64,7 @@ struct DashboardView: View {
     // MARK: Resolved range [from, to] (whole days, inclusive)
 
     private var range: (from: Date, to: Date) {
-        let cal = Calendar.current
+        let cal = state.calendar
         let today = cal.startOfDay(for: Date())
         let back = offset == .previous  // shift one period into the past
 
@@ -245,7 +245,26 @@ struct DashboardView: View {
 
     private var totalSeconds: Int {
         if let report = teamReport { return report.totalSeconds }
+        // The entry list is capped at 500 by the API, so for an unfiltered personal view
+        // the server's aggregate is the authoritative total; the running timer isn't in
+        // it (an open entry has no end), so it's added on top.
+        if projectFilter.isEmpty, let serverTotal = state.report?.totalSeconds {
+            return serverTotal + runningSecondsInRange
+        }
         return rows.reduce(0) { $0 + $1.seconds }
+    }
+
+    /// Live seconds of the running timer when it falls inside the selected range.
+    private var runningSecondsInRange: Int {
+        guard let active = state.activeEntry, let start = active.startDate,
+              start >= range.from, start <= range.to else { return 0 }
+        return state.activeElapsedSeconds
+    }
+
+    /// The API caps a time-entry list at 500 rows; past that the per-day chart and the
+    /// project breakdown below are built from a partial set.
+    private var entriesTruncated: Bool {
+        !isTeamScope && state.dashboardEntries.count >= 500
     }
 
     var body: some View {
@@ -256,6 +275,11 @@ struct DashboardView: View {
                     if state.canViewTeam { scopeMenu }
                     projectFilterMenu
                     totalCard
+                    if entriesTruncated {
+                        Text("This range has more than 500 entries — the breakdown below covers the most recent 500. The total is exact.")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                     if isTeamScope && state.reportRestricted {
                         restrictedCard
                     } else {
@@ -267,6 +291,16 @@ struct DashboardView: View {
                 .padding()
             }
             .navigationTitle("Dashboard")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                // Which organization these numbers belong to — the timer screen shows it
+                // in its title, the dashboard didn't.
+                ToolbarItem(placement: .principal) {
+                    if let org = state.selectedMembership?.organizationName {
+                        Text(org).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
+            }
             .task(id: reloadKey) { await reload() }
             .refreshable { await reload() }
             .toolbar {
@@ -515,7 +549,7 @@ struct DashboardView: View {
 
     private var rangeLabel: String {
         let f = DateFormatter(); f.dateFormat = "d MMM"
-        if Calendar.current.isDate(range.from, inSameDayAs: range.to) {
+        if state.calendar.isDate(range.from, inSameDayAs: range.to) {
             return f.string(from: range.from)
         }
         return "\(f.string(from: range.from)) – \(f.string(from: range.to))"

@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var state: AppState
     @State private var showSignOutConfirm = false
+    @FocusState private var rateFieldFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -87,6 +88,7 @@ struct SettingsView: View {
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .frame(maxWidth: 90)
+                            .focused($rateFieldFocused)
                         Text("\(state.currency)/h").foregroundStyle(.secondary)
                     }
                 } header: {
@@ -131,6 +133,14 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { rateFieldFocused = false }
+                }
+            }
+            // Tapping anywhere outside the field also dismisses the pad.
+            .scrollDismissesKeyboard(.interactively)
             .confirmationDialog("Sign out of SolidTime?", isPresented: $showSignOutConfirm, titleVisibility: .visible) {
                 Button("Sign out", role: .destructive) { state.signOut() }
                 Button("Cancel", role: .cancel) {}

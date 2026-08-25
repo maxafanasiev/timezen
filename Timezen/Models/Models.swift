@@ -20,10 +20,13 @@ struct User: Decodable, Identifiable {
     let email: String
     let profilePhotoUrl: String?
     let timezone: String?
+    /// First day of the week as configured in SolidTime ("monday", "sunday", ...).
+    let weekStart: String?
 
     enum CodingKeys: String, CodingKey {
         case id, name, email, timezone
         case profilePhotoUrl = "profile_photo_url"
+        case weekStart = "week_start"
     }
 }
 
@@ -46,7 +49,7 @@ struct Membership: Decodable, Identifiable, Hashable {
 
 // MARK: - Time entry
 
-struct TimeEntry: Decodable, Identifiable, Hashable {
+struct TimeEntry: Codable, Identifiable, Hashable {
     let id: String
     let start: String
     let end: String?
@@ -74,7 +77,7 @@ struct TimeEntry: Decodable, Identifiable, Hashable {
 
 // MARK: - Project / Task / Tag / Client
 
-struct Project: Decodable, Identifiable, Hashable {
+struct Project: Codable, Identifiable, Hashable {
     let id: String
     let name: String
     let color: String
@@ -90,7 +93,7 @@ struct Project: Decodable, Identifiable, Hashable {
     }
 }
 
-struct ProjectTask: Decodable, Identifiable, Hashable {
+struct ProjectTask: Codable, Identifiable, Hashable {
     let id: String
     let name: String
     let isDone: Bool?
@@ -103,12 +106,12 @@ struct ProjectTask: Decodable, Identifiable, Hashable {
     }
 }
 
-struct Tag: Decodable, Identifiable, Hashable {
+struct Tag: Codable, Identifiable, Hashable {
     let id: String
     let name: String
 }
 
-struct Client: Decodable, Identifiable, Hashable {
+struct Client: Codable, Identifiable, Hashable {
     let id: String
     let name: String
 }

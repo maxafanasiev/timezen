@@ -21,6 +21,12 @@ enum TimezenSharedKey {
     static let todayBaseSeconds = "todayBaseSeconds"   // completed entries that started today
     static let todayDay = "todayDay"                   // start of the day the base refers to
     static let runningStart = "runningStart"           // running timer start, -1 when idle
+    static let timezone = "timezone"                   // the SolidTime profile's timezone
+    // The draft the app would start a timer with, so the widget button matches it.
+    static let draftDescription = "draftDescription"
+    static let draftProjectId = "draftProjectId"
+    static let draftTaskId = "draftTaskId"
+    static let draftBillable = "draftBillable"
 }
 
 /// Today's tracked time, reconstructed from the shared snapshot.
@@ -36,14 +42,25 @@ struct TimezenTodaySnapshot {
     /// Start of the running timer, if one is running.
     var runningStart: Date?
 
+    /// "Today" follows the SolidTime profile's timezone, the same way the app and the
+    /// server group days — a device travelling to another timezone shouldn't shift it.
+    static func calendar(_ ud: UserDefaults?) -> Calendar {
+        var cal = Calendar(identifier: .gregorian)
+        if let name = ud?.string(forKey: TimezenSharedKey.timezone), let zone = TimeZone(identifier: name) {
+            cal.timeZone = zone
+        }
+        return cal
+    }
+
     static func load(now: Date = Date(),
                      from ud: UserDefaults? = UserDefaults(suiteName: timezenAppGroup)) -> TimezenTodaySnapshot {
-        let today = Calendar.current.startOfDay(for: now)
+        let cal = calendar(ud)
+        let today = cal.startOfDay(for: now)
         let dayTS = ud?.double(forKey: TimezenSharedKey.todayDay) ?? 0
         let day = dayTS > 0 ? Date(timeIntervalSince1970: dayTS) : today
         let startTS = ud?.double(forKey: TimezenSharedKey.runningStart) ?? -1
         // A base written on an earlier day no longer describes today.
-        let base = Calendar.current.isDate(day, inSameDayAs: today)
+        let base = cal.isDate(day, inSameDayAs: today)
             ? (ud?.integer(forKey: TimezenSharedKey.todayBaseSeconds) ?? 0) : 0
         return TimezenTodaySnapshot(baseSeconds: max(0, base), day: today,
                                     runningStart: startTS > 0 ? Date(timeIntervalSince1970: startTS) : nil)
@@ -73,7 +90,7 @@ struct TimezenTodaySnapshot {
     static func addCompleted(seconds: Int, startedAt: Date, now: Date = Date(),
                              to ud: UserDefaults? = UserDefaults(suiteName: timezenAppGroup)) {
         guard let ud, seconds > 0 else { return }
-        let cal = Calendar.current
+        let cal = calendar(ud)
         let today = cal.startOfDay(for: now)
         guard cal.isDate(startedAt, inSameDayAs: today) else { return }
         let current = load(now: now, from: ud)
@@ -135,12 +152,23 @@ enum TimezenWidgetTimer {
         } else {
             guard let org = ud?.string(forKey: "orgId"), !org.isEmpty,
                   let member = ud?.string(forKey: "memberId"), !member.isEmpty else { return }
-            _ = await send("POST", "/organizations/\(org)/time-entries",
-                           ["member_id": member, "start": now, "end": NSNull(), "billable": false])
+            // Start with whatever the app has staged (project, task, description,
+            // billable), so the widget button behaves like the button in the app.
+            let description = ud?.string(forKey: TimezenSharedKey.draftDescription) ?? ""
+            let projectId = ud?.string(forKey: TimezenSharedKey.draftProjectId) ?? ""
+            let taskId = ud?.string(forKey: TimezenSharedKey.draftTaskId) ?? ""
+            var body: [String: Any] = [
+                "member_id": member, "start": now, "end": NSNull(),
+                "billable": ud?.bool(forKey: TimezenSharedKey.draftBillable) ?? false,
+            ]
+            if !description.isEmpty { body["description"] = description }
+            if !projectId.isEmpty { body["project_id"] = projectId }
+            if !taskId.isEmpty { body["task_id"] = taskId }
+            _ = await send("POST", "/organizations/\(org)/time-entries", body)
             ud?.set(Date().timeIntervalSince1970, forKey: TimezenSharedKey.runningStart)
-            ud?.set("", forKey: "runningTitle")
-            ud?.set("Timer", forKey: "runningProject")
-            ud?.set("#5B4BEC", forKey: "runningColor")
+            ud?.set(description, forKey: "runningTitle")
+            ud?.set(ud?.string(forKey: "draftProjectName") ?? "Timer", forKey: "runningProject")
+            ud?.set(ud?.string(forKey: "draftProjectColor") ?? "#5B4BEC", forKey: "runningColor")
         }
         WidgetCenter.shared.reloadAllTimelines()
     }

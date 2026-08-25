@@ -38,6 +38,11 @@ final class AppState: ObservableObject {
     /// True until the first entry fetch for the current session/organization finishes, so
     /// the history can show a loading placeholder instead of an "empty" state.
     @Published var entriesLoaded: Bool = false
+    /// Whether the server may still have older entries than the ones loaded.
+    @Published var moreEntriesAvailable: Bool = false
+    @Published var loadingMoreEntries: Bool = false
+    /// The last sync failed to reach the server and the screen shows cached data.
+    @Published var isOffline: Bool = false
     @Published var now: Date = Date()
 
     // Dashboard
@@ -96,11 +101,11 @@ final class AppState: ObservableObject {
     private var demoCounter = 0
 
     // Draft used when starting a new timer
-    @Published var draftDescription: String = ""
-    @Published var draftProjectId: String?
-    @Published var draftTaskId: String?
+    @Published var draftDescription: String = "" { didSet { publishDraft() } }
+    @Published var draftProjectId: String? { didSet { publishDraft() } }
+    @Published var draftTaskId: String? { didSet { publishDraft() } }
     @Published var draftTagIds: Set<String> = []
-    @Published var draftBillable: Bool = false
+    @Published var draftBillable: Bool = false { didSet { publishDraft() } }
 
     // UI
     /// Bumped when a finished timer makes this a good moment to ask for a rating; the
@@ -235,8 +240,9 @@ final class AppState: ObservableObject {
         // Publish only completed time + the running start: the widget counts the live
         // part itself, and a snapshot from an earlier day reads as 0 instead of stale.
         shared.set(widgetTodayBaseSeconds(), forKey: TimezenSharedKey.todayBaseSeconds)
-        shared.set(Calendar.current.startOfDay(for: Date()).timeIntervalSince1970,
+        shared.set(calendar.startOfDay(for: Date()).timeIntervalSince1970,
                    forKey: TimezenSharedKey.todayDay)
+        shared.set(user?.timezone ?? TimeZone.current.identifier, forKey: TimezenSharedKey.timezone)
         if let active = activeEntry, let start = active.startDate {
             shared.set(start.timeIntervalSince1970, forKey: TimezenSharedKey.runningStart)
             shared.set(active.description ?? "", forKey: "runningTitle")
@@ -246,13 +252,56 @@ final class AppState: ObservableObject {
         } else {
             shared.set(-1.0, forKey: TimezenSharedKey.runningStart)
         }
+        publishDraft()
         WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    // MARK: - Offline cache
+
+    /// Load the cached session for the stored organization, if there is one.
+    private func restoreCache() {
+        guard let cached = OfflineCache.load(), cached.organizationId == storedOrgId else { return }
+        if recentEntries.isEmpty {
+            recentEntries = cached.entries
+            entriesLoaded = true
+        }
+        if projects.isEmpty {
+            projects = cached.projects
+            tasks = cached.tasks
+            tags = cached.tags
+            clients = cached.clients
+        }
+    }
+
+    /// Persist what's on screen so the next launch isn't empty.
+    private func saveCache() {
+        guard !isDemo, let orgId = organizationId else { return }
+        OfflineCache.save(CachedSession(organizationId: orgId,
+                                        entries: recentEntries.filter { !$0.isRunning },
+                                        projects: projects,
+                                        tasks: tasks,
+                                        tags: tags,
+                                        clients: clients,
+                                        savedAt: Date()))
+    }
+
+    /// Mirror the draft into the App Group so the widget's Start button creates the same
+    /// entry the app would. Cheap enough to run on every edit — no timeline reload.
+    private func publishDraft() {
+        guard let shared = UserDefaults(suiteName: timezenAppGroup) else { return }
+        shared.set(draftDescription, forKey: TimezenSharedKey.draftDescription)
+        shared.set(draftProjectId ?? "", forKey: TimezenSharedKey.draftProjectId)
+        shared.set(draftTaskId ?? "", forKey: TimezenSharedKey.draftTaskId)
+        shared.set(draftBillable, forKey: TimezenSharedKey.draftBillable)
+        let project = project(for: draftProjectId)
+        shared.set(project?.name ?? "Timer", forKey: "draftProjectName")
+        shared.set(project?.color ?? "#5B4BEC", forKey: "draftProjectColor")
     }
 
     /// Completed time tracked today; the running timer is published separately as its
     /// start date so the widget can keep counting without the app.
     private func widgetTodayBaseSeconds() -> Int {
-        let cal = Calendar.current
+        let cal = calendar
         let today = cal.startOfDay(for: Date())
         return recentEntries
             .filter { !$0.isRunning && cal.isDate($0.startDate ?? .distantPast, inSameDayAs: today) }
@@ -299,6 +348,8 @@ final class AppState: ObservableObject {
             phase = .loggedOut
             return
         }
+        // Show the last synced data immediately; the network refresh replaces it.
+        restoreCache()
         // Restore demo session without hitting the network.
         if Self.isDemoCredentials(host: storedHost, token: token) {
             loadDemoData()
@@ -383,6 +434,7 @@ final class AppState: ObservableObject {
     }
 
     func signOut() {
+        OfflineCache.clear()
         Keychain.delete("apiToken")
         token = ""
         storedHost = ""
@@ -394,6 +446,7 @@ final class AppState: ObservableObject {
         activeEntry = nil; recentEntries = []; dashboardEntries = []
         members = []; report = nil; reportRestricted = false; membersProbed = false
         membersStatus = .unknown; reportStatus = .unknown; organizationDetail = nil
+        moreEntriesAvailable = false
         entriesLoaded = false
         isDemo = false
         resetDraft()
@@ -416,6 +469,7 @@ final class AppState: ObservableObject {
         projects = []; tasks = []; tags = []; clients = []
         members = []; report = nil; reportRestricted = false; membersProbed = false
         membersStatus = .unknown; reportStatus = .unknown; organizationDetail = nil
+        moreEntriesAvailable = false
         recentEntries = []; entriesLoaded = false
         resetDraft()
         await loadOrganizationData()
@@ -439,6 +493,7 @@ final class AppState: ObservableObject {
             tasks = try await t
             tags = try await g
             clients = try await c
+            saveCache()
             // Probe the team endpoints once per organization so Settings can report
             // whether this server supports them, even before the dashboard is opened.
             if !membersProbed {
@@ -487,8 +542,14 @@ final class AppState: ObservableObject {
         // Running timer is user-scoped and always allowed.
         do {
             activeEntry = try await client.activeTimeEntry()
+            isOffline = false
         } catch APIError.unauthorized {
             signOut(); return
+        } catch APIError.transport {
+            // No connection: keep showing the cached data and say so, rather than
+            // interrupting with an alert on every launch.
+            isOffline = true
+            return
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
@@ -496,7 +557,11 @@ final class AppState: ObservableObject {
         // History is org-scoped: an "employee" may lack permission to list it.
         // Treat that as "no visible history" rather than an error or a sign-out.
         do {
-            recentEntries = try await client.timeEntries(organizationId: orgId, memberId: selectedMembership?.id, limit: 100)
+            let page = try await client.timeEntries(organizationId: orgId,
+                                                    memberId: selectedMembership?.id,
+                                                    limit: Self.entriesPageSize)
+            recentEntries = page
+            moreEntriesAvailable = page.count == Self.entriesPageSize
             entriesRestricted = false
         } catch APIError.unauthorized {
             signOut()
@@ -509,6 +574,32 @@ final class AppState: ObservableObject {
         syncTimerReminder()
         syncLiveActivity()
         updateWidgetSnapshot()
+        saveCache()
+    }
+
+    /// How many entries the history loads per page.
+    static let entriesPageSize = 100
+
+    /// Append the next page of older entries to the history.
+    func loadMoreEntries() async {
+        guard !isDemo, moreEntriesAvailable, !loadingMoreEntries else { return }
+        guard let client, let orgId = organizationId else { return }
+        loadingMoreEntries = true
+        defer { loadingMoreEntries = false }
+        do {
+            let page = try await client.timeEntries(organizationId: orgId,
+                                                    memberId: selectedMembership?.id,
+                                                    limit: Self.entriesPageSize,
+                                                    offset: recentEntries.count)
+            // The running entry is served separately and can repeat across pages.
+            let known = Set(recentEntries.map(\.id))
+            recentEntries.append(contentsOf: page.filter { !known.contains($0.id) })
+            moreEntriesAvailable = page.count == Self.entriesPageSize
+        } catch APIError.unauthorized {
+            signOut()
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
     }
 
     /// On initial load, if a timer is running in a different organization than the one
@@ -847,7 +938,7 @@ final class AppState: ObservableObject {
 
     /// Dashboard rows (completed + running-if-in-range) with effective seconds and day bucket.
     func dashboardRows(from: Date, to: Date) -> [(entry: TimeEntry, seconds: Int, day: Date)] {
-        let cal = Calendar.current
+        let cal = calendar
         var rows: [(TimeEntry, Int, Date)] = []
         for e in dashboardEntries where !e.isRunning {
             // The API already filters by range; demo data (and stale results after a
@@ -863,6 +954,28 @@ final class AppState: ObservableObject {
     }
 
     // MARK: - Organization-wide reporting
+
+    /// Calendar matching the SolidTime profile — the server groups days in the user's
+    /// timezone and weeks from their configured first weekday, so grouping locally with
+    /// the device's settings would disagree with the web app (and with team reports).
+    var calendar: Calendar {
+        var cal = Calendar(identifier: .gregorian)
+        if let name = user?.timezone, let zone = TimeZone(identifier: name) {
+            cal.timeZone = zone
+        }
+        if let start = user?.weekStart?.lowercased(), let index = Self.weekdayIndex[start] {
+            cal.firstWeekday = index
+        } else {
+            cal.firstWeekday = Calendar.current.firstWeekday
+        }
+        return cal
+    }
+
+    /// Weekday names as SolidTime spells them → `Calendar.firstWeekday` (1 = Sunday).
+    private static let weekdayIndex: [String: Int] = [
+        "sunday": 1, "monday": 2, "tuesday": 3, "wednesday": 4,
+        "thursday": 5, "friday": 6, "saturday": 7,
+    ]
 
     /// Currency of the selected organization (ISO 4217), used to format money.
     var currency: String { selectedMembership?.organization.currency ?? "USD" }
@@ -968,7 +1081,7 @@ final class AppState: ObservableObject {
 
     /// Offline equivalent of `loadReport` for the demo/App Review account.
     private func demoReport(from: Date, to: Date, memberId: String?, projectIds: [String]) -> OrgReport {
-        let cal = Calendar.current
+        let cal = calendar
         var rows = dashboardRows(from: from, to: to)
         if !projectIds.isEmpty {
             // "none" is the API's stand-in for entries without a project.
@@ -1022,11 +1135,11 @@ final class AppState: ObservableObject {
         entriesLoaded = true
         demoCounter = 0
         let now = Date()
-        let cal = Calendar.current
+        let cal = Calendar.current   // demo entries are laid out in device time
         let org = "org-demo"
 
         user = User(id: "u1", name: "Alex Rivera", email: "alex@acme.studio",
-                    profilePhotoUrl: nil, timezone: "Europe/Kyiv")
+                    profilePhotoUrl: nil, timezone: "Europe/Kyiv", weekStart: "monday")
         let membership = Membership(
             id: "m1",
             organization: Membership.Organization(id: org, name: "Acme Studio", currency: "USD"),

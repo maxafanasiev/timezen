@@ -34,7 +34,8 @@ struct TodayProvider: TimelineProvider {
         let entry = load(now: now)
         // While a timer runs the total is rendered live, so the only reload that really
         // matters is midnight, when "today" resets. Refresh periodically as a backstop.
-        let midnight = Calendar.current.startOfDay(for: now.addingTimeInterval(24 * 3600))
+        let cal = TimezenTodaySnapshot.calendar(UserDefaults(suiteName: timezenAppGroup))
+        let midnight = cal.startOfDay(for: now.addingTimeInterval(24 * 3600))
         let next = min(midnight, now.addingTimeInterval(15 * 60))
         completion(Timeline(entries: [entry], policy: .after(next)))
     }
