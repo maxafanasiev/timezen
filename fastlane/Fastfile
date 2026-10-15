@@ -89,7 +89,7 @@ platform :ios do
       api_key: api_key,
       app_version: version,
       build_number: build.to_s,
-      release_notes: { "default" => File.read(File.expand_path("whats_new.txt", __dir__)).strip },
+      release_notes: { "en-US" => File.read(File.expand_path("whats_new.txt", __dir__)).strip },
       submit_for_review: true,
       automatic_release: true,
       submission_information: { add_id_info_uses_idfa: false },
