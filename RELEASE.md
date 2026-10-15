@@ -10,7 +10,8 @@ Pipeline: **GitHub Actions + Fastlane**. Signing certs/profiles are managed by *
 
 Work goes into `develop` (the default branch); `main` only receives release merges from `develop`.
 Repo rulesets enforce it: both branches accept changes only through PRs (no direct or force
-pushes, no deletion), and PRs into `main` must pass `source-is-develop` (`main-source.yml`).
+pushes, no deletion), the PR `build` check (`pr.yml`) must pass, and PRs into `main` must also pass
+`source-is-develop` (`main-source.yml`).
 
 - Bundle id: `com.afanasievmaksym.timezen`
 - Apple Team ID: `2ZAN8NR82A`
