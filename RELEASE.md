@@ -9,6 +9,8 @@ Pipeline: **GitHub Actions + Fastlane**. Signing certs/profiles are managed by *
 | `release.yml` (App Store release) | push/merge to `main` (code changes only), manual | submits the latest TestFlight build of the current `MARKETING_VERSION` to App Store review with `fastlane/whats_new.txt`, auto-release after approval; skips if that version is already submitted or live |
 
 Work goes into `develop` (the default branch); `main` only receives release merges from `develop`.
+Repo rulesets enforce it: both branches accept changes only through PRs (no direct or force
+pushes, no deletion), and PRs into `main` must pass `source-is-develop` (`main-source.yml`).
 
 - Bundle id: `com.afanasievmaksym.timezen`
 - Apple Team ID: `2ZAN8NR82A`
