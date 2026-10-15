@@ -28,6 +28,7 @@ struct ProjectPickerView: View {
 
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
             List {
                 Section {
                     Button {
@@ -43,6 +44,40 @@ struct ProjectPickerView: View {
                                 Image(systemName: "checkmark").foregroundStyle(.tint)
                             }
                         }
+                    }
+                }
+
+                if !tasksForSelected.isEmpty {
+                    Section("Task") {
+                        Button {
+                            selectedTaskId = nil
+                        } label: {
+                            HStack {
+                                Text("No task").foregroundStyle(.secondary)
+                                Spacer()
+                                if selectedTaskId == nil {
+                                    Image(systemName: "checkmark").foregroundStyle(.tint)
+                                }
+                            }
+                        }
+                        .id("tasks")
+                        ForEach(tasksForSelected) { task in
+                            Button {
+                                selectedTaskId = task.id
+                            } label: {
+                                HStack {
+                                    Text(task.name).foregroundStyle(.primary)
+                                    Spacer()
+                                    if selectedTaskId == task.id {
+                                        Image(systemName: "checkmark").foregroundStyle(.tint)
+                                    }
+                                }
+                            }
+                        }
+                        Button { newTaskName = ""; showNewTask = true } label: {
+                            Label("New task", systemImage: "plus.circle")
+                        }
+                        .disabled(!state.canCreateTasks)
                     }
                 }
 
@@ -70,39 +105,11 @@ struct ProjectPickerView: View {
                         Text("Your role in this organization doesn't allow creating projects.")
                     }
                 }
-
-                if !tasksForSelected.isEmpty {
-                    Section("Task") {
-                        Button {
-                            selectedTaskId = nil
-                        } label: {
-                            HStack {
-                                Text("No task").foregroundStyle(.secondary)
-                                Spacer()
-                                if selectedTaskId == nil {
-                                    Image(systemName: "checkmark").foregroundStyle(.tint)
-                                }
-                            }
-                        }
-                        ForEach(tasksForSelected) { task in
-                            Button {
-                                selectedTaskId = task.id
-                            } label: {
-                                HStack {
-                                    Text(task.name).foregroundStyle(.primary)
-                                    Spacer()
-                                    if selectedTaskId == task.id {
-                                        Image(systemName: "checkmark").foregroundStyle(.tint)
-                                    }
-                                }
-                            }
-                        }
-                        Button { newTaskName = ""; showNewTask = true } label: {
-                            Label("New task", systemImage: "plus.circle")
-                        }
-                        .disabled(!state.canCreateTasks)
-                    }
-                }
+            }
+            // Tasks sit above a possibly huge project list; jump there after picking a project.
+            .onChange(of: selectedProjectId) {
+                withAnimation { proxy.scrollTo("tasks", anchor: .top) }
+            }
             }
             .refreshable { await state.refreshProjectsAndTasks() }
             .task { await state.refreshProjectsAndTasks() }
