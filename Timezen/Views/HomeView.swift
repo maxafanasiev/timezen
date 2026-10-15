@@ -10,6 +10,7 @@ struct HomeView: View {
     @State private var editingEntry: TimeEntry?
     @State private var showProjectPicker = false
     @State private var showTagPicker = false
+    @State private var showTaskPicker = false
     @State private var showNewEntry = false
     @State private var searchText = ""
 
@@ -91,6 +92,11 @@ struct HomeView: View {
             .sheet(isPresented: $showTagPicker) {
                 TagPickerView(selected: $state.draftTagIds)
             }
+            .sheet(isPresented: $showTaskPicker) {
+                if let pid = state.draftProjectId {
+                    TaskPickerView(projectId: pid, selectedTaskId: $state.draftTaskId)
+                }
+            }
         }
     }
 
@@ -130,9 +136,16 @@ struct HomeView: View {
                 }
                 HStack(spacing: 16) {
                     Button { showProjectPicker = true } label: {
-                        ProjectLabel(projectId: state.draftProjectId, taskId: state.draftTaskId)
+                        ProjectLabel(projectId: state.draftProjectId, taskId: nil)
                     }
                     .buttonStyle(.plain)
+
+                    if state.draftProjectId != nil {
+                        Button { showTaskPicker = true } label: {
+                            TaskLabel(taskId: state.draftTaskId)
+                        }
+                        .buttonStyle(.plain)
+                    }
 
                     Spacer()
 

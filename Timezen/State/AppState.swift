@@ -897,6 +897,11 @@ final class AppState: ObservableObject {
         return tasks.first { $0.id == id }
     }
 
+    func openTasks(for projectId: String?) -> [ProjectTask] {
+        guard let projectId else { return [] }
+        return tasks.filter { $0.projectId == projectId && !($0.isDone ?? false) }
+    }
+
     func tagNames(for ids: [String]) -> [String] {
         ids.compactMap { id in tags.first { $0.id == id }?.name }
     }

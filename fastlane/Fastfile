@@ -55,22 +55,46 @@ platform :ios do
       }
     )
 
+    groups = ENV["TESTFLIGHT_GROUPS"].to_s.split(",").map(&:strip).reject(&:empty?)
+    changelog = ENV["CHANGELOG"].to_s.strip
+    changelog = last_git_commit[:message].to_s.strip if changelog.empty?
+
     upload_to_testflight(
       api_key: api_key,
-      skip_waiting_for_build_processing: true
+      changelog: changelog,
+      # External distribution needs the processed build.
+      skip_waiting_for_build_processing: groups.empty?,
+      distribute_external: !groups.empty?,
+      groups: groups.empty? ? nil : groups
     )
   end
 
-  desc "Promote the latest TestFlight build's metadata & submit to App Store review"
+  desc "Submit the latest TestFlight build of the current version to App Store review"
   lane :release do
     api_key = asc_api_key
+    version = get_version_number(xcodeproj: PROJECT, target: "Timezen")
+
+    app = Spaceship::ConnectAPI::App.find("com.afanasievmaksym.timezen")
+    existing = app.get_app_store_versions(filter: { versionString: version }).first
+    editable = %w[PREPARE_FOR_SUBMISSION DEVELOPER_REJECTED REJECTED METADATA_REJECTED]
+    if existing && !editable.include?(existing.app_store_state)
+      UI.important("#{version} is already #{existing.app_store_state}; bump MARKETING_VERSION to release. Skipping.")
+      next
+    end
+
+    build = latest_testflight_build_number(api_key: api_key, version: version)
     deliver(
       api_key: api_key,
-      submit_for_review: false,   # flip to true once metadata/screenshots are ready
-      force: true,                # skip HTML preview
-      skip_binary_upload: true,   # binary already on TestFlight via `beta`
+      app_version: version,
+      build_number: build.to_s,
+      release_notes: { "default" => File.read(File.expand_path("whats_new.txt", __dir__)).strip },
+      submit_for_review: true,
+      automatic_release: true,
+      submission_information: { add_id_info_uses_idfa: false },
+      force: true,
+      skip_binary_upload: true,
       skip_screenshots: true,
-      precheck_include_in_app_purchases: false
+      run_precheck_before_submit: false
     )
   end
 end
