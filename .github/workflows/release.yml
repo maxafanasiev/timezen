@@ -1,0 +1,30 @@
+name: App Store release
+
+on:
+  workflow_dispatch:
+    inputs:
+      whats_new:
+        description: "What's New text for the App Store"
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
+      WHATS_NEW: ${{ inputs.whats_new }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby + Fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Submit to App Store review
+        run: bundle exec fastlane release

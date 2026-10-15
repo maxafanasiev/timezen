@@ -2,13 +2,19 @@ name: iOS CI
 
 on:
   push:
+    branches: [main]
     tags:
-      - "v*"            # e.g. git tag v1.0.0 && git push --tags  → builds & uploads to TestFlight
-  workflow_dispatch:      # or run manually from the Actions tab
+      - "v*"
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "fastlane/screenshots/**"
+  workflow_dispatch:
 
+# Build numbers come from TestFlight, so two uploads must never run at once.
 concurrency:
-  group: ios-${{ github.ref }}
-  cancel-in-progress: true
+  group: testflight
+  cancel-in-progress: false
 
 jobs:
   testflight:
@@ -23,6 +29,9 @@ jobs:
       MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
       MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
       MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+      # Comma-separated external TestFlight groups; empty = upload only.
+      TESTFLIGHT_GROUPS: ${{ vars.TESTFLIGHT_GROUPS }}
+      CHANGELOG: ${{ github.event.head_commit.message }}
     steps:
       - uses: actions/checkout@v4
 
