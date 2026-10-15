@@ -30,6 +30,19 @@ struct ProjectLabel: View {
     }
 }
 
+struct TaskLabel: View {
+    @EnvironmentObject var state: AppState
+    let taskId: String?
+
+    var body: some View {
+        let task = state.task(for: taskId)
+        Label(task?.name ?? "No task", systemImage: "checklist")
+            .foregroundStyle(task == nil ? .secondary : .primary)
+            .font(.subheadline)
+            .lineLimit(1)
+    }
+}
+
 struct TagChips: View {
     let names: [String]
     var body: some View {
