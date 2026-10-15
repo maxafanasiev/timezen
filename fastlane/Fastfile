@@ -65,7 +65,9 @@ platform :ios do
       # External distribution needs the processed build.
       skip_waiting_for_build_processing: groups.empty?,
       distribute_external: !groups.empty?,
-      groups: groups.empty? ? nil : groups
+      groups: groups.empty? ? nil : groups,
+      # Apple allows one build per version in beta review; replace the older one with this build.
+      reject_build_waiting_for_review: !groups.empty?
     )
   end
 
