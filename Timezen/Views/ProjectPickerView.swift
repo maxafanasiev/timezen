@@ -7,8 +7,6 @@ struct ProjectPickerView: View {
     @Binding var selectedTaskId: String?
     @State private var search = ""
     @State private var showNewProject = false
-    @State private var showNewTask = false
-    @State private var newTaskName = ""
 
     private var filteredProjects: [Project] {
         let active = state.projects.filter { !($0.isArchived ?? false) }
@@ -21,10 +19,7 @@ struct ProjectPickerView: View {
                 set: { if !$0 { state.errorMessage = nil } })
     }
 
-    private var tasksForSelected: [ProjectTask] {
-        guard let pid = selectedProjectId else { return [] }
-        return state.tasks.filter { $0.projectId == pid && !($0.isDone ?? false) }
-    }
+    private var tasksForSelected: [ProjectTask] { state.openTasks(for: selectedProjectId) }
 
     var body: some View {
         NavigationStack {
@@ -47,38 +42,8 @@ struct ProjectPickerView: View {
                     }
                 }
 
-                if !tasksForSelected.isEmpty {
-                    Section("Task") {
-                        Button {
-                            selectedTaskId = nil
-                        } label: {
-                            HStack {
-                                Text("No task").foregroundStyle(.secondary)
-                                Spacer()
-                                if selectedTaskId == nil {
-                                    Image(systemName: "checkmark").foregroundStyle(.tint)
-                                }
-                            }
-                        }
-                        .id("tasks")
-                        ForEach(tasksForSelected) { task in
-                            Button {
-                                selectedTaskId = task.id
-                            } label: {
-                                HStack {
-                                    Text(task.name).foregroundStyle(.primary)
-                                    Spacer()
-                                    if selectedTaskId == task.id {
-                                        Image(systemName: "checkmark").foregroundStyle(.tint)
-                                    }
-                                }
-                            }
-                        }
-                        Button { newTaskName = ""; showNewTask = true } label: {
-                            Label("New task", systemImage: "plus.circle")
-                        }
-                        .disabled(!state.canCreateTasks)
-                    }
+                if let pid = selectedProjectId, !tasksForSelected.isEmpty {
+                    TaskSection(projectId: pid, selectedTaskId: $selectedTaskId)
                 }
 
                 Section {
@@ -143,14 +108,85 @@ struct ProjectPickerView: View {
                     return true
                 }
             }
-            .alert("New task", isPresented: $showNewTask) {
-                TextField("Task name", text: $newTaskName)
-                Button("Create") {
-                    guard let pid = selectedProjectId else { return }
-                    let name = newTaskName
-                    Task { if let t = await state.createTask(name: name, projectId: pid) { selectedTaskId = t.id } }
+        }
+    }
+}
+
+struct TaskSection: View {
+    @EnvironmentObject var state: AppState
+    let projectId: String
+    @Binding var selectedTaskId: String?
+    @State private var showNewTask = false
+    @State private var newTaskName = ""
+
+    var body: some View {
+        Section("Task") {
+            Button {
+                selectedTaskId = nil
+            } label: {
+                HStack {
+                    Text("No task").foregroundStyle(.secondary)
+                    Spacer()
+                    if selectedTaskId == nil {
+                        Image(systemName: "checkmark").foregroundStyle(.tint)
+                    }
                 }
-                Button("Cancel", role: .cancel) {}
+            }
+            .id("tasks")
+            ForEach(state.openTasks(for: projectId)) { task in
+                Button {
+                    selectedTaskId = task.id
+                } label: {
+                    HStack {
+                        Text(task.name).foregroundStyle(.primary)
+                        Spacer()
+                        if selectedTaskId == task.id {
+                            Image(systemName: "checkmark").foregroundStyle(.tint)
+                        }
+                    }
+                }
+            }
+            Button { newTaskName = ""; showNewTask = true } label: {
+                Label("New task", systemImage: "plus.circle")
+            }
+            .disabled(!state.canCreateTasks)
+        }
+        .alert("New task", isPresented: $showNewTask) {
+            TextField("Task name", text: $newTaskName)
+            Button("Create") {
+                let name = newTaskName
+                Task { if let t = await state.createTask(name: name, projectId: projectId) { selectedTaskId = t.id } }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+}
+
+struct TaskPickerView: View {
+    @EnvironmentObject var state: AppState
+    @Environment(\.dismiss) private var dismiss
+    let projectId: String
+    @Binding var selectedTaskId: String?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                TaskSection(projectId: projectId, selectedTaskId: $selectedTaskId)
+            }
+            .refreshable { await state.refreshProjectsAndTasks() }
+            .onChange(of: selectedTaskId) { dismiss() }
+            .alert("Couldn't save", isPresented: Binding(get: { state.errorMessage != nil },
+                                                          set: { if !$0 { state.errorMessage = nil } })) {
+                Button("OK", role: .cancel) { state.errorMessage = nil }
+            } message: {
+                Text(state.errorMessage ?? "")
+            }
+            .navigationTitle("Select Task")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
             }
         }
     }
