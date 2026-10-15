@@ -53,7 +53,7 @@ Timezen/
 ├─ Utils/                  Formatters, hex colors, appearance
 └─ Views/                  SwiftUI screens (Home, Dashboard, Settings, edit, pickers, login)
 fastlane/                  Fastlane lanes (beta → TestFlight, release → App Store)
-.github/workflows/         CI: build + upload to TestFlight on version tags
+.github/workflows/         CI: PR build, TestFlight on merge to main, manual App Store release
 ```
 
 ## API notes

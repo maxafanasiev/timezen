@@ -1,7 +1,12 @@
 # Release & CI/CD (Timezen)
 
-Pipeline: **GitHub Actions + Fastlane**. Pushing a `v*` tag builds a signed Release `.ipa` and
-uploads it to **TestFlight**. Signing certs/profiles are managed by **fastlane match**.
+Pipeline: **GitHub Actions + Fastlane**. Signing certs/profiles are managed by **fastlane match**.
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| `pr.yml` (PR build) | every pull request | unsigned simulator build, no secrets |
+| `ios.yml` (iOS CI) | merge/push to `main` (code changes only), `v*` tag, manual | signed build → TestFlight, then external groups from `TESTFLIGHT_GROUPS` |
+| `release.yml` (App Store release) | manual, with a "What's New" text | submits the latest TestFlight build of the current `MARKETING_VERSION` to App Store review, auto-release after approval |
 
 - Bundle id: `com.afanasievmaksym.timezen`
 - Apple Team ID: `2ZAN8NR82A`
@@ -39,17 +44,19 @@ Repo → Settings → Secrets and variables → **Actions** → New repository s
 | `MATCH_GIT_URL` | `https://github.com/maxafanasiev/timezen-certs` |
 | `MATCH_GIT_BASIC_AUTHORIZATION` | base64 of `USERNAME:GITHUB_PAT` (PAT with repo scope) |
 
+Optional repository **variable** (Variables tab): `TESTFLIGHT_GROUPS`, comma-separated external
+TestFlight group names. When set, each build is sent to those groups (Beta App Review applies);
+when empty, builds are only uploaded.
+
 ## Releasing
 
-```sh
-git tag v1.0.0
-git push origin v1.0.0        # → GitHub Actions builds & uploads to TestFlight
-```
-Or run the **iOS CI** workflow manually (Actions tab → Run workflow).
+1. Merge to `main` → a new TestFlight build (number = latest + 1). The merge commit message is
+   the "What to Test" text.
+2. For a new App Store version, bump `MARKETING_VERSION` in the project first (App Store Connect
+   rejects a version that is already released).
+3. Actions → **App Store release** → Run workflow, enter the "What's New" text.
 
-- Internal testers get the build automatically (no review).
-- For external testers / App Store: fill metadata + screenshots, then `fastlane release`
-  (set `submit_for_review: true` in the Fastfile when ready).
+Internal testers get every build automatically (no review).
 
 ## Local (from a Mac)
 
@@ -62,5 +69,4 @@ bundle exec fastlane beta
 ## Notes
 - Build number auto-increments to `latest TestFlight build + 1`.
 - The app is signed for distribution via the `match AppStore com.afanasievmaksym.timezen` profile.
-- Marketing version lives in the project (`MARKETING_VERSION`, currently 1.0) — bump it for a new
-  App Store version.
+- Marketing version lives in the project (`MARKETING_VERSION`); bump it for a new App Store version.
