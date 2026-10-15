@@ -2,40 +2,50 @@ name: iOS CI
 
 on:
   push:
-    tags:
-      - "v*"            # e.g. git tag v1.0.0 && git push --tags  → builds & uploads to TestFlight
-  workflow_dispatch:      # or run manually from the Actions tab
+    branches: [develop]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "fastlane/screenshots/**"
+  workflow_dispatch:
 
+# Build numbers come from TestFlight, so two uploads must never run at once.
 concurrency:
-  group: ios-${{ github.ref }}
-  cancel-in-progress: true
+  group: testflight
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
   testflight:
     runs-on: macos-15
     timeout-minutes: 40
-    env:
-      # App Store Connect API key (base64) — see RELEASE.md
-      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-      ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
-      # fastlane match
-      MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-      MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
-      MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Select Xcode
-        uses: maxim-lobanov/setup-xcode@v1
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
           xcode-version: latest-stable
 
       - name: Set up Ruby + Fastlane
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@651ff0d62c5c79bed6d53ec518387aae20e72c1a # v1
         with:
           ruby-version: "3.3"
           bundler-cache: true
 
       - name: Build & upload to TestFlight
+        env:
+          # App Store Connect API key (base64) — see RELEASE.md
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
+          # fastlane match
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          # Comma-separated external TestFlight groups; empty = upload only.
+          TESTFLIGHT_GROUPS: ${{ vars.TESTFLIGHT_GROUPS }}
+          CHANGELOG: ${{ github.event.head_commit.message }}
         run: bundle exec fastlane beta

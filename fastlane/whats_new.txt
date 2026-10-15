@@ -1,0 +1,2 @@
+- Separate Task row on the timer screen and in entry editing, so picking a task no longer means scrolling through the whole project list.
+- In the project picker, tasks of the selected project now show at the top.

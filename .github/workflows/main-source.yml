@@ -1,0 +1,22 @@
+name: Main source
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  source-is-develop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: PRs into main must come from develop
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$HEAD_REF" != "develop" ] || [ "$HEAD_REPO" != "$REPO" ]; then
+            echo "::error::PRs into main must come from $REPO:develop, got $HEAD_REPO:$HEAD_REF"
+            exit 1
+          fi

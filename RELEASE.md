@@ -1,7 +1,17 @@
 # Release & CI/CD (Timezen)
 
-Pipeline: **GitHub Actions + Fastlane**. Pushing a `v*` tag builds a signed Release `.ipa` and
-uploads it to **TestFlight**. Signing certs/profiles are managed by **fastlane match**.
+Pipeline: **GitHub Actions + Fastlane**. Signing certs/profiles are managed by **fastlane match**.
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| `pr.yml` (PR build) | every pull request | unsigned simulator build, no secrets |
+| `ios.yml` (iOS CI) | push/merge to `develop` (code changes only), manual | signed build → TestFlight, then the groups from `TESTFLIGHT_GROUPS` |
+| `release.yml` (App Store release) | push/merge to `main` (code changes only), manual | submits the latest TestFlight build of the current `MARKETING_VERSION` to App Store review with `fastlane/whats_new.txt`, auto-release after approval; skips if that version is already submitted or live |
+
+Work goes into `develop` (the default branch); `main` only receives release merges from `develop`.
+Repo rulesets enforce it: both branches accept changes only through PRs (no direct or force
+pushes, no deletion), the PR `build` check (`pr.yml`) must pass, and PRs into `main` must also pass
+`source-is-develop` (`main-source.yml`).
 
 - Bundle id: `com.afanasievmaksym.timezen`
 - Apple Team ID: `2ZAN8NR82A`
@@ -39,17 +49,19 @@ Repo → Settings → Secrets and variables → **Actions** → New repository s
 | `MATCH_GIT_URL` | `https://github.com/maxafanasiev/timezen-certs` |
 | `MATCH_GIT_BASIC_AUTHORIZATION` | base64 of `USERNAME:GITHUB_PAT` (PAT with repo scope) |
 
+Repository **variable** (Variables tab): `TESTFLIGHT_GROUPS`, comma-separated TestFlight group
+names, currently `Internal Testing,all`. Each build is sent to those groups (external ones go through
+Beta App Review); when empty, builds are only uploaded.
+
 ## Releasing
 
-```sh
-git tag v1.0.0
-git push origin v1.0.0        # → GitHub Actions builds & uploads to TestFlight
-```
-Or run the **iOS CI** workflow manually (Actions tab → Run workflow).
+1. Merge feature PRs into `develop` → each merge is a new TestFlight build (number = latest + 1).
+   The merge commit message is the "What to Test" text.
+2. Before a release, bump `MARKETING_VERSION` (project + `project.yml`) and update
+   `fastlane/whats_new.txt` in `develop`, and let that build reach TestFlight.
+3. Open a PR `develop` → `main` and merge it → the build is submitted for App Store review.
 
-- Internal testers get the build automatically (no review).
-- For external testers / App Store: fill metadata + screenshots, then `fastlane release`
-  (set `submit_for_review: true` in the Fastfile when ready).
+Without a version bump the release workflow just logs that the version is already out and exits.
 
 ## Local (from a Mac)
 
@@ -62,5 +74,4 @@ bundle exec fastlane beta
 ## Notes
 - Build number auto-increments to `latest TestFlight build + 1`.
 - The app is signed for distribution via the `match AppStore com.afanasievmaksym.timezen` profile.
-- Marketing version lives in the project (`MARKETING_VERSION`, currently 1.0) — bump it for a new
-  App Store version.
+- Marketing version lives in the project (`MARKETING_VERSION`); bump it for a new App Store version.
