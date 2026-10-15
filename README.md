@@ -5,6 +5,10 @@
 start/stop timer with project, task, tags and billable selection, plus your time-entry history
 and a personal dashboard.
 
+[App Store](https://apps.apple.com/app/id6786309367) ·
+[TestFlight beta](https://testflight.apple.com/join/j7mspwVg) ·
+[Website](https://maxafanasiev.github.io/timezen-site/)
+
 > Timezen is an independent, unofficial client. "SolidTime" is a trademark of its respective
 > owners; this app is not affiliated with or endorsed by SolidTime.
 
@@ -15,10 +19,14 @@ and a personal dashboard.
   history below with per-day totals.
 - **Edit entries** — description, project/task, tags, billable, and start/end/duration.
 - **Resume** or **Duplicate** an entry (swipe), **Delete** (swipe).
+- **Manual entries**, search across description/project/tag, and **CSV export**.
 - **Dashboard** — Day / Week / Month / Half-month / Custom ranges with Current/Previous, totals,
-  a per-project stacked bar chart, and a project filter.
+  a per-project stacked bar chart, a project filter, and team reports with billable amounts.
+- **Home screen widget** with a Start/Stop button, **Live Activity** / Dynamic Island timer,
+  and **Siri / Shortcuts** actions.
+- **Offline cache** of the last synced data, **Face ID lock**, iPad sidebar layout.
 - **Dark / Light / System** theme.
-- **Multi-organization** support.
+- **Multi-organization** support with role-aware project/task creation.
 
 ## Requirements
 
@@ -33,6 +41,14 @@ and a personal dashboard.
 3. Set your **Team** under *Signing & Capabilities* for a physical device.
 4. Build & Run (⌘R).
 5. On first launch, enter your SolidTime server URL and API token.
+
+### Building from a fork
+
+The project is set up for the author's Apple team. To run it on a device under your own account,
+change the **Team**, the bundle ids (`com.afanasievmaksym.timezen` and
+`com.afanasievmaksym.timezen.TimezenWidgets`) and the App Group
+(`group.com.afanasievmaksym.timezen` in both `.entitlements` files and
+`Shared/TimerActivityAttributes.swift`). The simulator needs none of that.
 
 ### Regenerating the project (optional)
 
@@ -67,4 +83,14 @@ Key endpoints: `GET /users/me`, `GET /users/me/memberships`,
 ## Release & CI/CD
 
 See [`RELEASE.md`](RELEASE.md) for TestFlight/App Store setup and the GitHub Actions + Fastlane
-pipeline (required secrets, `match` signing, and how releases are triggered).
+pipeline (required secrets, `match` signing, and how releases are triggered). CI runs only on
+version tags in this repo; forks don't have the signing secrets.
+
+## Contributing
+
+Issues and pull requests are welcome. Keep PRs focused on one change, and mention what you
+tested (device/simulator, iOS version, SolidTime server version).
+
+## License
+
+[MIT](LICENSE)
