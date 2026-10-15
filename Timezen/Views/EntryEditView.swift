@@ -20,6 +20,7 @@ struct EntryEditView: View {
 
     @State private var showProjectPicker = false
     @State private var showTagPicker = false
+    @State private var showTaskPicker = false
     @State private var showDeleteConfirm = false
     @State private var editingDuration = false
 
@@ -110,12 +111,23 @@ struct EntryEditView: View {
                 Section {
                     Button { showProjectPicker = true } label: {
                         HStack {
-                            ProjectLabel(projectId: projectId, taskId: taskId)
+                            ProjectLabel(projectId: projectId, taskId: nil)
                             Spacer()
                             Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
                         }
                     }
                     .buttonStyle(.plain)
+
+                    if projectId != nil {
+                        Button { showTaskPicker = true } label: {
+                            HStack {
+                                TaskLabel(taskId: taskId)
+                                Spacer()
+                                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
 
                     Button { showTagPicker = true } label: {
                         HStack {
@@ -213,6 +225,11 @@ struct EntryEditView: View {
             }
             .sheet(isPresented: $showTagPicker) {
                 TagPickerView(selected: $tagIds)
+            }
+            .sheet(isPresented: $showTaskPicker) {
+                if let projectId {
+                    TaskPickerView(projectId: projectId, selectedTaskId: $taskId)
+                }
             }
             .confirmationDialog("Delete this entry?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
                 Button("Delete", role: .destructive) {
