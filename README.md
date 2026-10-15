@@ -83,8 +83,8 @@ Key endpoints: `GET /users/me`, `GET /users/me/memberships`,
 ## Release & CI/CD
 
 See [`RELEASE.md`](RELEASE.md) for TestFlight/App Store setup and the GitHub Actions + Fastlane
-pipeline (required secrets, `match` signing, and how releases are triggered). CI runs only on
-version tags in this repo; forks don't have the signing secrets.
+pipeline (required secrets, `match` signing, and how releases are triggered). Pull requests,
+including ones from forks, get an unsigned simulator build; signed builds run only in this repo.
 
 ## Contributing
 
