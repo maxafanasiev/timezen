@@ -1,12 +1,17 @@
 name: App Store release
 
 on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "fastlane/screenshots/**"
   workflow_dispatch:
-    inputs:
-      whats_new:
-        description: "What's New text for the App Store"
-        required: true
-        type: string
+
+concurrency:
+  group: app-store-release
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -29,5 +34,4 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
-          WHATS_NEW: ${{ inputs.whats_new }}
-        run: bundle exec fastlane release
+          run: bundle exec fastlane release

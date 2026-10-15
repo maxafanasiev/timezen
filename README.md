@@ -69,7 +69,7 @@ Timezen/
 ├─ Utils/                  Formatters, hex colors, appearance
 └─ Views/                  SwiftUI screens (Home, Dashboard, Settings, edit, pickers, login)
 fastlane/                  Fastlane lanes (beta → TestFlight, release → App Store)
-.github/workflows/         CI: PR build, TestFlight on merge to main, manual App Store release
+.github/workflows/         CI: PR build, TestFlight on develop, App Store release on main
 ```
 
 ## API notes
@@ -88,7 +88,7 @@ including ones from forks, get an unsigned simulator build; signed builds run on
 
 ## Contributing
 
-Issues and pull requests are welcome. Keep PRs focused on one change, and mention what you
+Issues and pull requests are welcome; open PRs against `develop`. Keep PRs focused on one change, and mention what you
 tested (device/simulator, iOS version, SolidTime server version).
 
 ## License

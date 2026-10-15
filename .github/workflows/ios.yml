@@ -2,9 +2,7 @@ name: iOS CI
 
 on:
   push:
-    branches: [main]
-    tags:
-      - "v*"
+    branches: [develop]
     paths-ignore:
       - "**.md"
       - "docs/**"
